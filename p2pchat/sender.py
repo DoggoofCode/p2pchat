@@ -2,7 +2,7 @@ from data_gateway.data_sender import UDPCommunicator
 from message_encryption import keys, Message, MessagePacket, MsgData
 from message_encryption.encryption_keys import RSAEncryptionKeys
 import threading, time
-
+from os.path import join
 
 def incoming(communicator: UDPCommunicator, encrypt: RSAEncryptionKeys):
     while True:
@@ -19,12 +19,15 @@ def incoming(communicator: UDPCommunicator, encrypt: RSAEncryptionKeys):
 def main():
 
     encryption_key = keys.verify(
-        "..\\encryption_info\\keys\\public.pem",
-        "..\\encryption_info\\keys\\private.pem"
+        public_keys_file=join("..", "encryption_info", "key", "public.pem"),
+        private_key_file=join("..", "encryption_info", "key", "public.pem")
     )
     print("encryption key is: {}".format(encryption_key))
 
-    comm = UDPCommunicator()
+    with open(join("..", "encryption_info", "IPSETUP.conf"), 'rb') as file:
+        file_content = file.readlines()
+
+    comm = UDPCommunicator(host=file_content[0])
     responder = threading.Thread(target=incoming, args=(comm, encryption_key))
     responder.start()
 

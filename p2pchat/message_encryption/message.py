@@ -43,9 +43,9 @@ class Message:
 
     def __repr__(self):
         if self.message_ref is None:
-            referencer = self.data[0]
+            referencer = self.data
         else:
-            referencer = f"{self.message_ref} for {self.data[0]}"
+            referencer = f"{self.message_ref} for {self.data}"
         return f"Message({self.message_type}: {referencer})"
 
 class MessagePacket:
@@ -57,27 +57,27 @@ class MessagePacket:
     def encrypt(self, public_encryption_keys: RSAPublicKey) -> bytes:
         message = pickle.dumps(self.message_type)
         # The `message` is too long fix later
-        ciphertext = public_encryption_keys.encrypt(
-            b"hello world!" * 10000,
-            padding.OAEP(
-                mgf=padding.MGF1(algorithm=hashes.SHA256()),
-                algorithm=hashes.SHA256(),
-                label=None
-            )
-        )
-        return ciphertext
+        # ciphertext = public_encryption_keys.encrypt(
+        #     b"hello world!" * 10000,
+        #     padding.OAEP(
+        #         mgf=padding.MGF1(algorithm=hashes.SHA256()),
+        #         algorithm=hashes.SHA256(),
+        #         label=None
+        #     )
+        # )
+        return message
 
-    def decrypt(self, private_encryption_key: RSAPrivateKey) -> Message:
-        plaintext = private_encryption_key.decrypt(
-            self.message_type,
-            padding.OAEP(
-                mgf=padding.MGF1(algorithm=hashes.SHA256()),
-                algorithm=hashes.SHA256(),
-                label=None
-            )
-        )
-        # Uses pickle to remove message as a dep
-        return pickle.loads(plaintext)
+    def decrypt(self, private_encryption_key: RSAPrivateKey) -> None:
+        # plaintext = private_encryption_key.decrypt(
+        #     self.message_type,
+        #     padding.OAEP(
+        #         mgf=padding.MGF1(algorithm=hashes.SHA256()),
+        #         algorithm=hashes.SHA256(),
+        #         label=None
+        #     )
+        # )
+        # # Uses pickle to remove message as a dep
+        self.message_type = pickle.loads(self.message_type)
 
     def serialize(self) -> bytes:
         return pickle.dumps(self)
@@ -85,5 +85,8 @@ class MessagePacket:
     @staticmethod
     def deserialize(data: bytes):
         return pickle.loads(data)
+
+    def __repr__(self):
+        return f"MessagePacket({self.message_type})"
 
 
