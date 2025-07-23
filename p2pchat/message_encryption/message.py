@@ -4,8 +4,10 @@ from typing import Literal
 from hashlib import sha256
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey, RSAPrivateKey
 
-from cryptography.hazmat.primitives.asymmetric import padding
-from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import padding as asymmetric_padding
+from cryptography.hazmat.primitives import hashes, serialization
+
+from p2pchat.message_encryption.encryption_keys import aes_encrypt, aes_decrypt
 
 MESSAGE_TYPES = Literal["send-msg", "edit-msg", "del-msg", "change-gname", "add_member"]
 
@@ -50,34 +52,42 @@ class Message:
 
 class MessagePacket:
     def __init__(self, message_type: Message, encryption_key: RSAPublicKey) -> None:
-        self.message_type = message_type
+        self.message_data = message_type
         self.hash = message_type.hash
-        self.message_type: bytes = self.encrypt(encryption_key)
+        self.AES_key: bytes = b''
+        self.AES_iv:bytes = b''
+        self.message_data: bytes = self.encrypt(encryption_key)
 
     def encrypt(self, public_encryption_keys: RSAPublicKey) -> bytes:
-        message = pickle.dumps(self.message_type)
-        # The `message` is too long fix later
-        # ciphertext = public_encryption_keys.encrypt(
-        #     b"hello world!" * 10000,
-        #     padding.OAEP(
-        #         mgf=padding.MGF1(algorithm=hashes.SHA256()),
-        #         algorithm=hashes.SHA256(),
-        #         label=None
-        #     )
-        # )
-        return message
+        message_bytes: bytes = pickle.dumps(self.message_data)
+        print(f"Encrypting {message_bytes.hex()[:10]}...")
+        cipher_text, key, iv = aes_encrypt(message_bytes)
+
+        encrypted_AES_ciphertext = public_encryption_keys.encrypt(
+            key,
+            asymmetric_padding.OAEP(
+                mgf=asymmetric_padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None
+            )
+        )
+        self.AES_key = encrypted_AES_ciphertext
+        self.AES_iv = iv
+        return cipher_text
 
     def decrypt(self, private_encryption_key: RSAPrivateKey) -> None:
-        # plaintext = private_encryption_key.decrypt(
-        #     self.message_type,
-        #     padding.OAEP(
-        #         mgf=padding.MGF1(algorithm=hashes.SHA256()),
-        #         algorithm=hashes.SHA256(),
-        #         label=None
-        #     )
-        # )
-        # # Uses pickle to remove message as a dep
-        self.message_type = pickle.loads(self.message_type)
+        decrypted_AES_key = private_encryption_key.decrypt(
+            self.AES_key,
+            asymmetric_padding.OAEP(
+                mgf=asymmetric_padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None
+            )
+        )
+
+        plain_text = aes_decrypt(self.message_data, decrypted_AES_key, self.AES_iv)
+        print(f"Encrypting {plain_text.hex()[:10]}...")
+        self.message_data = pickle.loads(plain_text)
 
     def serialize(self) -> bytes:
         return pickle.dumps(self)
@@ -87,6 +97,6 @@ class MessagePacket:
         return pickle.loads(data)
 
     def __repr__(self):
-        return f"MessagePacket({self.message_type})"
+        return f"MessagePacket({self.message_data})"
 
 

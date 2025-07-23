@@ -1,4 +1,4 @@
-from data_gateway.data_sender import UDPCommunicator
+from packet_sender.data_sender import UDPCommunicator
 from message_encryption import keys, Message, MessagePacket, MsgData
 from message_encryption.encryption_keys import RSAEncryptionKeys
 import threading, time
