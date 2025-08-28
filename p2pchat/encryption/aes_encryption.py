@@ -30,7 +30,7 @@ def aes_decrypt(ciphertext: bytes, key:bytes, iv:bytes) -> bytes:
     return plaintext
 
 if __name__ == "__main__":
-
+    print("===Testing AES Encryption===")
     plaintext = b"Hello, World!"
     ciphertext, key, iv = aes_encrypt(plaintext)
     decrypted_text = aes_decrypt(ciphertext, key, iv)
