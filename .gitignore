@@ -1,4 +1,4 @@
 .ropeproject/
 .venv/
 __pycache--/
-encryption_keys/
+user_data/
