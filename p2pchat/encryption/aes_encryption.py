@@ -28,12 +28,3 @@ def aes_decrypt(ciphertext: bytes, key:bytes, iv:bytes) -> bytes:
     plaintext = unpadder.update(padded_plaintext) + unpadder.finalize()
 
     return plaintext
-
-if __name__ == "__main__":
-    print("===Testing AES Encryption===")
-    plaintext = b"Hello, World!"
-    ciphertext, key, iv = aes_encrypt(plaintext)
-    decrypted_text = aes_decrypt(ciphertext, key, iv)
-    print(f"Original Text: {plaintext}")
-    print(f"Encrypted Text: {ciphertext}")
-    print(f"Decrypted Text: {decrypted_text}")
