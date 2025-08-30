@@ -3,7 +3,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.asymmetric.types import PrivateKeyTypes, PublicKeyTypes
 
-from rsastructs import RSAEncryptionKeys 
+from .rsastructs import RSAEncryptionKeys
 from typing import cast
 from os import path
 import os

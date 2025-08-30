@@ -1,6 +1,6 @@
 import hashlib, socket, threading
 from queue import Queue
-from packetstruct import ReceivedInformation, ReceivedChunk
+from .packetstruct import ReceivedInformation, ReceivedChunk
 
 CHUNK_SIZE = 14 * 1024
 PACKET_LIMIT = 16 * 1024
@@ -61,6 +61,6 @@ class PacketGateway:
             if not self.shutdown_callback.is_set():
                 self.sender_sock.sendto(serialized, target_address)
 
-    def stop(self):
+    def close_socks(self):
         self.sock.close()
         self.sender_sock.close()
