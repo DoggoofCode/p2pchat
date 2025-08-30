@@ -1,3 +1,5 @@
+from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey, RSAPrivateKey
+
 class RSAEncryptionKeys:
     def __init__(self, public_key: RSAPublicKey, private_key: RSAPrivateKey) -> None:
         self.public_key = public_key
