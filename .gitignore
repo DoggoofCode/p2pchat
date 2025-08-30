@@ -1,4 +1,4 @@
 .ropeproject/
 .venv/
-__pycache--/
+__pycache__/
 user_data/
