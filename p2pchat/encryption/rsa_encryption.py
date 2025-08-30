@@ -4,17 +4,10 @@ from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey, RSAPriva
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.asymmetric.types import PrivateKeyTypes, PublicKeyTypes
 
+from rsastructs import RSAEncryptionKeys 
 from typing import cast
 from os import path
 import os
-
-class RSAEncryptionKeys:
-    def __init__(self, public_key: RSAPublicKey, private_key: RSAPrivateKey | PrivateKeyTypes) -> None:
-        self.public_key = public_key
-        self.private_key = private_key
-
-    def __repr__(self):
-        return f"RSAEncryptionKeys(public_key={self.public_key}, private_key={self.private_key})"
 
 def create_keys(public_keys_file: str, private_key_file: str):
     private_key = rsa.generate_private_key(
