@@ -3,9 +3,8 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.asymmetric.types import PrivateKeyTypes, PublicKeyTypes
 
-from rsastructs import RSAEncryptionKeys 
+from .rsastructs import RSAEncryptionKeys
 from typing import cast
-from os import path
 import os
 
 def create_keys(public_keys_file: str, private_key_file: str):
@@ -66,11 +65,3 @@ def verify(public_keys_file: str, private_key_file: str) -> RSAEncryptionKeys:
         create_keys(public_keys_file, private_key_file)
         keys = read_keys(public_keys_file, private_key_file)
         return keys
-
-
-if __name__ == "__main__":
-    print("===Testing RSA Encryption===")
-    public_keys_file = path.abspath(path.join(os.getcwd(), "user_data", "keys", "public_keys.pem"))
-    private_key_file = path.abspath(path.join(os.getcwd(), "user_data", "keys", "private_key.pem"))
-    create_keys(public_keys_file, private_key_file)
-    print(read_keys(public_keys_file, private_key_file))
