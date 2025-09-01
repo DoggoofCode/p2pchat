@@ -43,8 +43,24 @@ Two different types of packet:
 > Header Data: group_id: _group id (256bit)_
 > Message Data: Message 
 **Response**
-> Message code: _smsgR_ 
+> Message code: _smsgR_
 > Header Data: result: (_affirmative_ or _negative_) 
 > Message Data: None 
 ### Request Public Keys
+**Query** 
+> Message code: _pkt_
+> Header Data: group_id: _group id (256bit)_
+> Message Data: None 
+**Response**
+> Message code: _pktR_ 
+> Header Data: result: (_affirmative_ or _negative_) 
+> Message Data: Key Table or None
 ### Requst Message DHT
+**Query** 
+> Message code: _dht_
+> Header Data: group_id: _group id (256bit)_
+> Message Data: None 
+**Response**
+> Message code: _dhtR_ 
+> Header Data: result: (_affirmative_ or _negative_) 
+> Message Data: DHT Table or None
