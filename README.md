@@ -19,48 +19,74 @@ group as a whole. This forces a clear chain of custody for primaries across the 
 Two different types of packet: 
 - Query: Queries query the recipient.
 - Response: A response type only exist for all packet types to afferm or deny, or to send other information. 
+
 ### Identify packet
+
 **Query** 
-> Message code: _i_
-> Header Data: Group ID  
+
+> Message code: _i_ \
+> Header Data: Group ID \
 > Message Data: None
+
 **Response**
-> Message code: _iR_ 
-> Header Data: user: (_viewer_ or _ratifier_)
+
+> Message code: _iR_ \
+> Header Data: user: (_viewer_ or _ratifier_) \
 > Message Data: None 
+
 ### Ratify Message
+
 **Query** 
-> Message code: _mrat_
-> Header Data: group_id: _group id (256bit)_
+
+> Message code: _mrat_ \
+> Header Data: group_id: _group id (256bit)_ \
 > Message Data: Message 
+
 **Response**
-> Message code: _mratR_ 
-> Header Data: result: (_affirmative_ or _negative_) 
+
+> Message code: _mratR_ \
+> Header Data: result: (_affirmative_ or _negative_) \
 > Message Data: None 
+
 ### Send Message
+
 **Query** 
-> Message code: _smsg_
-> Header Data: group_id: _group id (256bit)_
+
+> Message code: _smsg_ \
+> Header Data: group_id: _group id (256bit)_ \
 > Message Data: Message 
+
 **Response**
-> Message code: _smsgR_
-> Header Data: result: (_affirmative_ or _negative_) 
+
+> Message code: _smsgR_ \
+> Header Data: result: (_affirmative_ or _negative_) \
 > Message Data: None 
+
 ### Request Public Keys
+
 **Query** 
-> Message code: _pkt_
-> Header Data: group_id: _group id (256bit)_
+
+> Message code: _pkt_ \
+> Header Data: group_id: _group id (256bit)_ \
 > Message Data: None 
+
 **Response**
-> Message code: _pktR_ 
-> Header Data: result: (_affirmative_ or _negative_) 
+
+> Message code: _pktR_ \
+> Header Data: result: (_affirmative_ or _negative_) \
 > Message Data: Key Table or None
+
 ### Requst Message DHT
+
 **Query** 
-> Message code: _dht_
-> Header Data: group_id: _group id (256bit)_
+
+> Message code: _dht_ \
+> Header Data: group_id: _group id (256bit)_ \
 > Message Data: None 
+
 **Response**
-> Message code: _dhtR_ 
-> Header Data: result: (_affirmative_ or _negative_) 
+
+> Message code: _dhtR_ \
+> Header Data: result: (_affirmative_ or _negative_) \
 > Message Data: DHT Table or None
+
