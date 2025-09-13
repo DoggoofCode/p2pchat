@@ -25,7 +25,6 @@ def incoming(communicator: PacketGateway, shut_down, output):
     while not shut_down.is_set():
         try:
             msg = communicator.reassembled_messages.get(timeout=.5)
-            print(f"Received: {msg}")
             output.put(msg)
         except queue.Empty:
             continue
