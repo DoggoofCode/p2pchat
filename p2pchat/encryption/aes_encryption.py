@@ -3,7 +3,9 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import padding
 from os import urandom
-block_size: int = algorithms.AES.block_size  # type: ignore
+
+block_size: int = algorithms.AES.block_size  # pyright: ignore[reportAssignmentType]
+
 
 def aes_encrypt(plaintext: bytes) -> tuple[bytes, bytes, bytes]:
     AES_key: bytes = urandom(32)
@@ -19,7 +21,8 @@ def aes_encrypt(plaintext: bytes) -> tuple[bytes, bytes, bytes]:
 
     return ciphertext, AES_key, iv
 
-def aes_decrypt(ciphertext: bytes, key:bytes, iv:bytes) -> bytes:
+
+def aes_decrypt(ciphertext: bytes, key: bytes, iv: bytes) -> bytes:
     cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
     decryptor = cipher.decryptor()
     padded_plaintext = decryptor.update(ciphertext) + decryptor.finalize()

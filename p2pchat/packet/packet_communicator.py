@@ -5,10 +5,17 @@ from .packetstruct import ReceivedInformation, ReceivedChunk
 CHUNK_SIZE = 14 * 1024
 PACKET_LIMIT = 16 * 1024
 PORT = 6767
-ADDRESS = ('127.0.0.1', PORT)
+ADDRESS = ("127.0.0.1", PORT)
+
 
 class PacketGateway:
-    def __init__(self, shutdown_callback, *, host='127.0.0.1', port=6767, ):
+    def __init__(
+        self,
+        shutdown_callback,
+        *,
+        host="127.0.0.1",
+        port=6767,
+    ):
         self.address = (host, port)
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.bind(self.address)
@@ -16,7 +23,9 @@ class PacketGateway:
         self.shutdown_callback = shutdown_callback
 
         self.reassembled_messages: Queue[bytes] = Queue()
-        self.partial_messages: dict[bytes, ReceivedInformation] = {}  # {message_id: {chunk_num: data}}
+        self.partial_messages: dict[
+            bytes, ReceivedInformation
+        ] = {}  # {message_id: {chunk_num: data}}
 
         self.receiver_thread = threading.Thread(target=self._receive_loop, daemon=True)
         self.receiver_thread.start()
@@ -31,7 +40,9 @@ class PacketGateway:
                 msg_hash = chunk.message_hash
 
                 if not self.partial_messages.get(msg_hash):
-                    self.partial_messages[msg_hash] = ReceivedInformation(chunk.total_chunks, msg_hash)
+                    self.partial_messages[msg_hash] = ReceivedInformation(
+                        chunk.total_chunks, msg_hash
+                    )
                 self.partial_messages[msg_hash].add_chunk(chunk)
 
                 for hash, message in self.partial_messages.copy().items():
@@ -43,8 +54,8 @@ class PacketGateway:
             except Exception as e:
                 print(f"[Gateway] Receiver error: {e}")
 
-    def send(self, data: bytes, target_address=('127.0.0.1', PORT)):
-        data_hash = hashlib.sha256(data).digest() # 32 byte hash
+    def send(self, data: bytes, target_address: tuple[str, int] = ("127.0.0.1", PORT)):
+        data_hash = hashlib.sha256(data).digest()  # 32 byte hash
 
         total_chunks = (len(data) + CHUNK_SIZE - 1) // CHUNK_SIZE
         for chunk_number in range(total_chunks):
