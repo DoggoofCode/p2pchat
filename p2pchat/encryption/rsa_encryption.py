@@ -1,11 +1,17 @@
 # RSA Encryption
+import os
+from os import path
+from typing import cast
+
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.hazmat.primitives.asymmetric.types import PrivateKeyTypes, PublicKeyTypes
+from cryptography.hazmat.primitives.asymmetric.types import (
+    PrivateKeyTypes,
+    PublicKeyTypes,
+)
 
 from .rsastructs import RSAEncryptionKeys
-from typing import cast
-import os
+
 
 def create_keys(public_keys_file: str, private_key_file: str):
     private_key = rsa.generate_private_key(
@@ -16,7 +22,7 @@ def create_keys(public_keys_file: str, private_key_file: str):
     public_key = private_key.public_key()
     public_pem = public_key.public_bytes(
         encoding=serialization.Encoding.PEM,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
     )
     line_data = public_pem.splitlines()
 
@@ -35,12 +41,13 @@ def create_keys(public_keys_file: str, private_key_file: str):
     private_pem = private_key.private_bytes(
         encoding=serialization.Encoding.PEM,
         format=serialization.PrivateFormat.TraditionalOpenSSL,
-        encryption_algorithm=serialization.NoEncryption()
+        encryption_algorithm=serialization.NoEncryption(),
     )
     if not os.path.exists(private_key_file):
         # Write the private key to the file
         with open(private_key_file, "wb") as key_file:
             key_file.write(private_pem)
+
 
 def read_keys(public_keys_file: str, private_key_file: str) -> RSAEncryptionKeys:
     with open(public_keys_file, "rb") as key_file:
@@ -53,9 +60,9 @@ def read_keys(public_keys_file: str, private_key_file: str) -> RSAEncryptionKeys
             password=None,
         )
     return RSAEncryptionKeys(
-        cast(rsa.RSAPublicKey, public_key),
-        cast(rsa.RSAPrivateKey, private_key)
+        cast(rsa.RSAPublicKey, public_key), cast(rsa.RSAPrivateKey, private_key)
     )
+
 
 def verify(public_keys_file: str, private_key_file: str) -> RSAEncryptionKeys:
     try:
@@ -65,3 +72,19 @@ def verify(public_keys_file: str, private_key_file: str) -> RSAEncryptionKeys:
         create_keys(public_keys_file, private_key_file)
         keys = read_keys(public_keys_file, private_key_file)
         return keys
+
+
+def get_rsa_key() -> RSAEncryptionKeys:
+    public_keys_file = path.abspath(
+        path.join(os.getcwd(), "user_data", "keys", "public_key.pem")
+    )
+    private_key_file = path.abspath(
+        path.join(os.getcwd(), "user_data", "keys", "private_key.pem")
+    )
+
+    rsa_keys = verify(
+        public_keys_file.replace(r"/Users/vedjaggi", "~"),
+        private_key_file.replace(r"/Users/vedjaggi", "~"),
+    )
+
+    return rsa_keys

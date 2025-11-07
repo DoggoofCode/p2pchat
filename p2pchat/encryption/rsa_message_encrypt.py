@@ -1,15 +1,15 @@
+import base64
 import datetime
+import json as jsonify
+from hashlib import sha256
 from typing import Literal, override
 
-# from hashlib import sha256
-from p2pchat.encryption.rsa_encryption import verify
-import base64
-import json as jsonify
-
-from p2pchat.encryption.rsastructs import RSAEncryptionKeys
-
-from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import padding
+
+from p2pchat.encryption.aes_encryption import aes_decrypt, aes_encrypt
+from p2pchat.encryption.rsa_encryption import get_rsa_key
+from p2pchat.encryption.rsastructs import RSAEncryptionKeys
 
 MESSAGE_TYPES = Literal["send-msg", "edit-msg", "del-msg", "change-gname", "add_member"]
 
@@ -47,7 +47,7 @@ class Artifact:
     def __init__(self, data: bytes, data_type: str, data_hash: bytes):
         self.data: bytes = data
         self.data_type: str = data_type
-        self.data_hash: bytes = data_hash
+        self.data_hash: bytes = data_hash  # Hash of unencrypted data
 
     @override
     def __repr__(self):
@@ -68,7 +68,7 @@ class Message:
         message_type: MESSAGE_TYPES,
         time_stamp: datetime.datetime,
         author: bytes,
-        artifact: Artifact,
+        artifacts: list[Artifact],
         ref_hash: bytes | None = None,
     ) -> None:
         if not author:
@@ -83,18 +83,19 @@ class Message:
         self.ref_hash: bytes | None = ref_hash
         self.time_stamp: int = int(time_stamp.timestamp())
         self.author: bytes = author
-        self.artifact: Artifact = artifact
+        self.artifacts: list[Artifact] = artifacts
 
     @property
-    def dict(self):
+    def dict(self) -> dict:
         return {
             "message_type": self.message_type,
             "time_stamp": self.time_stamp,
             "author": base64.b64encode(self.author).decode("utf-8"),
-            "artifact": self.artifact.dict,
+            "artifact": [artifact.dict for artifact in self.artifacts],
             "ref_hash": base64.b64encode(self.ref_hash).decode("utf-8")
             if self.ref_hash
             else None,
+            "headers": {},
         }
 
 
@@ -103,9 +104,14 @@ class MessageWrapper:
         self,
         message_hash: bytes,
         message: Message,
+        aes_key: bytes,
+        iv: bytes,
     ) -> None:
         self.message_hash: bytes = message_hash
         self.message: Message = message
+        self.aes_key: bytes = aes_key
+        self.aes_iv: bytes = iv
+        self.signature: None = None
 
     @property
     def json(self):
@@ -113,97 +119,82 @@ class MessageWrapper:
             {
                 "message_hash": base64.b64encode(self.message_hash).decode("utf-8"),
                 "message": self.message.dict,
+                "aes_key": base64.b64encode(self.aes_key).decode("utf-8"),
+                "iv": base64.b64encode(self.aes_iv).decode("utf-8"),
+                "signature": base64.b64encode(self.signature).decode("utf-8")
+                if self.signature
+                else None,
             }
         )
 
 
-# class MsgData:
-#     def __init__(self, data: bytes, data_type: str):
-#         self.data: bytes = data
-#         self.data_type: str = data_type
+def create_message_wrapper(
+    artifacts_data: list[tuple[bytes, str]], author: bytes, message_type: MESSAGE_TYPES
+) -> MessageWrapper:
+    rsa_keys: RSAEncryptionKeys = get_rsa_key()
+    artifacts: list[Artifact] = []
+    combined_hash: bytes = b""
+    common_aes_key: bytes = b""
+    common_iv: bytes = b""
 
-#     def __repr__(self):
-#         return f"MsgData(data={self.data}, data_type='{self.data_type}')"
+    # Get and encrypt artifact data
+    for artifact_data in artifacts_data:
+        cipher_text, common_aes_key, common_iv = aes_encrypt(
+            artifact_data[0],
+            common_aes_key if common_aes_key else None,
+            common_iv if common_iv else None,
+        )
+        combined_hash += sha256(artifact_data[0]).digest()
+        artifacts.append(
+            Artifact(cipher_text, artifact_data[1], sha256(artifact_data[0]).digest())
+        )
 
-
-# class Message:
-#     def __init__(self,
-#         message_type: MESSAGE_TYPES,
-#         *,
-#         message_data: list[MsgData],
-#         message_ref: bytes | None = None,
-#     ):
-#         self.data: list[MsgData] = message_data
-#         self.message_type = message_type
-#         self.time_stamp = datetime.datetime.now()
-#         self.message_ref = message_ref
-#         if (
-#             message_ref is None
-#             and message_type == "edit-msg"
-#             and message_type == "del-msg"
-#         ):
-#             raise AssertionError(
-#                 "When when type is 'del-msg' or 'edit-msg' a message must be referenced"
-#             )
-
-# def serialize(self) -> bytes:
-#     return pickle.dumps(self)
-
-# @property
-# def hash(self) -> bytes:
-#     return sha256(self.serialize()).digest()
-
-# @staticmethod
-# def deserialize(data: bytes):
-#     return pickle.loads(data)
-
-# def __repr__(self):
-#     if self.message_ref is None:
-#         referencer = self.data
-#     else:
-#         referencer = f"{self.message_ref} for {self.data}"
-#     return f"Message({self.message_type}: {referencer})"
+    # Create message class
+    message = Message(
+        message_type,
+        datetime.datetime.now(),
+        author=author,
+        artifacts=artifacts,
+    )
+    # Send message wrapper
+    return MessageWrapper(
+        sha256(combined_hash).digest(),
+        message,
+        rsa_encrypt_message(common_aes_key, rsa_keys),
+        common_iv,
+    )
 
 
-# class MessagePacket:
-#     def __init__(self, message_type: Message, encryption_key: RSAPublicKey) -> None:
-#         self.message_type: Message = message_type
-#         self.hash = message_type.hash
-#         self.message_type: bytes = self.encrypt(encryption_key)
+def decode_message_wrapper(
+    json_data: str,
+) -> dict:
+    # TODO: Verify hash and signature
 
-#     def encrypt(self, public_encryption_keys: RSAPublicKey) -> bytes:
-#         message = pickle.dumps(self.message_type)
-#         # TODO: Encrypt chat
-#         # The `message` is too long fix later
-#         # ciphertext = public_encryption_keys.encrypt(
-#         #     b"hello world!" * 10000,
-#         #     padding.OAEP(
-#         #         mgf=padding.MGF1(algorithm=hashes.SHA256()),
-#         #         algorithm=hashes.SHA256(),
-#         #         label=None
-#         #     )
-#         # )
-#         return message
-
-#     def decrypt(self, private_encryption_key: RSAPrivateKey) -> None:
-#         # TODO: Actual Decrypt chat
-#         # plaintext = private_encryption_key.decrypt(
-#         #     self.message_type,
-#         #     padding.OAEP(
-#         #         mgf=padding.MGF1(algorithm=hashes.SHA256()),
-#         #         algorithm=hashes.SHA256(),
-#         #         label=None
-#         #     )
-#         # )
-#         # # Uses pickle to remove message as a dep
-#         self.message_type = pickle.loads(self.message_type)
-
-#     def serialize(self) -> bytes:
-#         return pickle.dumps(self)
-
-#     @staticmethod
-#     def deserialize(data: bytes):
-#         return pickle.loads(data)
-
-#     def __repr__(self):
-#         return f"MessagePacket({self.message_type})"
+    rsa_keys: RSAEncryptionKeys = get_rsa_key()
+    packet_data: dict = jsonify.loads(json_data)
+    decrypted_aes_key = rsa_decrypt_message(
+        base64.b64decode(packet_data["aes_key"]), rsa_keys
+    )
+    artifacts = [
+        {
+            "data": aes_decrypt(
+                base64.b64decode(art["data"]),
+                decrypted_aes_key,
+                base64.b64decode(packet_data["iv"]),
+            ),
+            "data_type": art["data_type"],
+        }
+        for art in packet_data["message"]["artifact"]
+    ]
+    return {
+        "message_type": packet_data["message"]["message_type"],
+        "time_stamp": datetime.datetime.fromtimestamp(
+            int(packet_data["message"]["time_stamp"])
+        ),
+        "author": base64.b64decode(packet_data["message"]["author"]).decode("utf-8"),
+        "ref-hash": None
+        if not packet_data["message"]["ref_hash"]
+        else base64.b64decode(packet_data["message"]["ref_hash"]).decode("utf-8"),
+        "headers": packet_data["message"]["headers"],
+        "artifact": artifacts,
+    }
