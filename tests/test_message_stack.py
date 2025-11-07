@@ -13,7 +13,7 @@ class TestAES(unittest.TestCase):
                 (b"goon", "txt"),
             ],
             b"ved",
-            "add_member",
+            "mrat",
         )
         decoded_message = decode_message_wrapper(message.json)
         self.assertIsNotNone(decoded_message)
