@@ -11,7 +11,9 @@ from p2pchat.encryption.aes_encryption import aes_decrypt, aes_encrypt
 from p2pchat.encryption.rsa_encryption import get_rsa_key
 from p2pchat.encryption.rsastructs import RSAEncryptionKeys
 
-MESSAGE_TYPES = Literal["send-msg", "edit-msg", "del-msg", "change-gname", "add_member"]
+MESSAGE_TYPES = Literal[
+    "i", "iR", "mrat", "mratR", "smsg", "smsgR", "pkt", "pktR", "dht", "dhtR"
+]
 
 
 def rsa_encrypt_message(information: bytes, keys: RSAEncryptionKeys) -> bytes:
@@ -73,12 +75,13 @@ class Message:
     ) -> None:
         if not author:
             raise ValueError("Author cannot be empty")
-        if ref_hash and not (message_type == "edit-msg" or message_type == "del-msg"):
-            raise ValueError(
-                "Ref hash must not be used when message type is not edit-msg or del-msg"
-            )
-        if not ref_hash and (message_type == "edit-msg" or message_type == "del-msg"):
-            raise ValueError(f"Ref hash must be bytes for {message_type}")
+        # Message hash code no longer needed
+        # if ref_hash and not (message_type == "edit-msg" or message_type == "del-msg"):
+        #     raise ValueError(
+        #         "Ref hash must not be used when message type is not edit-msg or del-msg"
+        #     )
+        # if not ref_hash and (message_type == "edit-msg" or message_type == "del-msg"):
+        #     raise ValueError(f"Ref hash must be bytes for {message_type}")
         self.message_type: MESSAGE_TYPES = message_type
         self.ref_hash: bytes | None = ref_hash
         self.time_stamp: int = int(time_stamp.timestamp())
