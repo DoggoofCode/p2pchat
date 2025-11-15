@@ -103,6 +103,7 @@ Two different types of packet:
       "time_stamp": 0000, // Unix timestamp of the message, for archival purposes only.
       "author": "B64 Encoded String", // B64 Encoded String of the author's public key.
       "ref_hash": "B64 Encoded String", // None or Hash String: None normally, when the message type edits another message, when the message type edits another message, the hash of the message being edited.
+      "group_id":"B64 Encoded String", // Group ID, encoded in base64, which is a 256 bit value  
       "headers": { // These are generic headers for response
         "identifier": "user", // User or Viewer based on their position in the group
         "response_code": 0 // Positive (0) or negative response (Any other response)
