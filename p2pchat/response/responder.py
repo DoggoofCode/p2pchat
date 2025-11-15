@@ -1,6 +1,6 @@
 import base64
 import os
-
+import shutil
 
 class Responder:
     MESSAGE_GROUPS: dict[bytes, str] = {}
@@ -42,5 +42,6 @@ class Responder:
         group_path = os.path.join(user_data_folder, base_64_id)
 
         # Recursively delete the group folder and its contents using python
-        os.system(f"rm -rf {group_path}")
+        # os.system(f"rm -rf {group_path}")
+        shutil.rmtree(group_path)
         self.MESSAGE_GROUPS.pop(group_unique_id)
