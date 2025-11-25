@@ -9,7 +9,7 @@ group as a whole. This forces a clear chain of custody for primaries across the 
 * Send a variety of data types without a functional character or size limit for users.
 
 ## TODO
-* Activated End-to-End encryption between sources with AES encryption (boring)
+* ~Activated End-to-End encryption between sources with AES encryption (boring)~
 * Create the distinction between users and ratifiers
 * Create a protocol for sending users and viewers data throughout the network
 * Save chats between users and viewers
@@ -90,11 +90,14 @@ Two different types of packet:
 > Header Data: result: (_affirmative_ or _negative_) \
 > Message Data: DHT Table or None
 
-## Packet Specifiations
+# Updated Packet Specifications
+## Type 1: Message
+_This type of packet is used to update the message log. All sensitive information is encrypted with AES key._
 
 ```json
 {
-    "message_hash": "B64 Encoded String", // Hash of the concatonations of all the artifact hashes. Intended as a unique identifier for the message.
+    "message_hash": "B64 Encoded String", // Hash of the concatenations of all the artifact hashes. Intended as a unique identifier for the message.
+    "previous_message_hash": "B64 Encoded String", // Hash of the previously sent message.  
     "aes_key": "B64 Encoded String", // RSA Encrypted AES Key for all artifact data
     "iv": "B64 Encoded String", // Initialization Vector for AES Key
     "signature": "B64 Encoded String", // RSA Signature of the message hash. Undiable proof of authenticity.
@@ -105,16 +108,44 @@ Two different types of packet:
       "ref_hash": "B64 Encoded String", // None or Hash String: None normally, when the message type edits another message, when the message type edits another message, the hash of the message being edited.
       "group_id":"B64 Encoded String", // Group ID, encoded in base64, which is a 256 bit value  
       "headers": { // These are generic headers for response
-        "identifier": "user", // User or Viewer based on their position in the group
+        "identifier": "user", // User, Viewer, and NA based on their position in the group
         "response_code": 0 // Positive (0) or negative response (Any other response)
       },
       "artifact": {
         "type": "String", // Type of artifact, one of the artifact types, currently "txt", "md", "png"
         "data": "B64 Encoded String", // B64 Encoded String of the artifact data encrypted with AES key
-        "hash": "B64 Encoded String" // Hash of the artifact data **encrypted with AES key**
-      }
-    }
+        "hash": "B64 Encoded String" // Hash of the artifact data encrypted with AES key
+      },
+    },
 }
 ```
 
+## Type 2: List 
+_This type is used to share the Public Key IP Table and the Distributed Hash Table_
+```json
+{
+  "table": "B64 Encoded String", // B64 Encoded String of the artifact data encrypted with AES key
+  "table_type": "String", // Type of table, one of the table types, currently "ip", "dht"
+  "message_hash": "B64 Encoded String", // Hash of the b64 table 
+  "aes_key": "B64 Encoded String", // RSA Encrypted AES Key for all artifact data
+  "iv": "B64 Encoded String", // Initialization Vector for AES Key
+  "signature": "B64 Encoded String", // RSA Signature of the message hash. 
+  
+}
+```
 > Note: Later, more formats will be used, currently the core does not supported edit or delete messages for complexity reasons. For now all RSA signatures will be omitted by using None because **I am lazy**
+
+
+## Type 3: Add / Remove Requests 
+_This type is used to add or remove, make users admin_
+```json
+{
+  "previous_message_hash": "B64 Encoded String", // Hash of the b64 table 
+  "message_hash": "B64 Encoded String", // Hash of the b64 table 
+  "request_type": "String", // Type of request, one of the request types, currently "add", "remove", "admin"
+  "user_referenced": "B64 Encoded String", // B64 Encoded String of the referenced user's public key 
+  "signature": "B64 Encoded String", // RSA Signature of the message hash. 
+  "user": "B64 Encoded String", // B64 Encoded String of the user's public key 
+  
+}
+```
