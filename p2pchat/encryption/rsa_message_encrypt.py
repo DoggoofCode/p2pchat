@@ -69,6 +69,7 @@ class Message:
         self,
         message_type: MESSAGE_TYPES,
         time_stamp: datetime.datetime,
+        group_id: bytes,
         author: bytes,
         artifacts: list[Artifact],
         ref_hash: bytes | None = None,
@@ -87,6 +88,7 @@ class Message:
         self.time_stamp: int = int(time_stamp.timestamp())
         self.author: bytes = author
         self.artifacts: list[Artifact] = artifacts
+        self.group_id: bytes = group_id
 
     @property
     def dict(self) -> dict:
@@ -94,6 +96,7 @@ class Message:
             "message_type": self.message_type,
             "time_stamp": self.time_stamp,
             "author": base64.b64encode(self.author).decode("utf-8"),
+            "group_id": base64.b64encode(self.group_id).decode("utf-8"),
             "artifact": [artifact.dict for artifact in self.artifacts],
             "ref_hash": base64.b64encode(self.ref_hash).decode("utf-8")
             if self.ref_hash
@@ -132,7 +135,10 @@ class MessageWrapper:
 
 
 def create_message_wrapper(
-    artifacts_data: list[tuple[bytes, str]], author: bytes, message_type: MESSAGE_TYPES
+    artifacts_data: list[tuple[bytes, str]],
+    author: bytes,
+    message_type: MESSAGE_TYPES,
+    group_id: bytes,
 ) -> MessageWrapper:
     rsa_keys: RSAEncryptionKeys = get_rsa_key()
     artifacts: list[Artifact] = []
@@ -158,6 +164,7 @@ def create_message_wrapper(
         datetime.datetime.now(),
         author=author,
         artifacts=artifacts,
+        group_id=group_id,
     )
     # Send message wrapper
     return MessageWrapper(
@@ -200,4 +207,5 @@ def decode_message_wrapper(
         else base64.b64decode(packet_data["message"]["ref_hash"]).decode("utf-8"),
         "headers": packet_data["message"]["headers"],
         "artifact": artifacts,
+        "group_id": base64.b64decode(packet_data["message"]["group_id"]),
     }
