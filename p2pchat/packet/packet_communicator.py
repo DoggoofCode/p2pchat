@@ -8,7 +8,6 @@ from .packetstruct import ReceivedChunk, ReceivedInformation
 CHUNK_SIZE = 14 * 1024
 PACKET_LIMIT = 16 * 1024
 PORT = 6767
-ADDRESS = ("127.0.0.1", PORT)
 
 
 class PacketGateway:
@@ -16,7 +15,7 @@ class PacketGateway:
         self,
         shutdown_callback,
         *,
-        host="127.0.0.1",
+        host="0.0.0.0",
         port=6767,
     ):
         self.address = (host, port)
