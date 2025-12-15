@@ -114,7 +114,7 @@ class MessageWrapper:
         self.message: Message = message
         self.aes_key: bytes = aes_key
         self.aes_iv: bytes = iv
-        self.signature: None = None
+        self.signature: None = None  # TODO: Create signature
 
     @property
     def json(self):

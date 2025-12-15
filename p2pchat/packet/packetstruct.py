@@ -1,12 +1,16 @@
 import pickle
 
+
 class Message:
-    def __init__(self, data:bytes, file_type:str) -> None:
+    def __init__(self, data: bytes, file_type: str) -> None:
         self.data = data
         self.file_type = file_type
 
+
 class ReceivedChunk:
-    def __init__(self, message_hash: bytes, chunk_number: int, total_chunks: int, data: bytes):
+    def __init__(
+        self, message_hash: bytes, chunk_number: int, total_chunks: int, data: bytes
+    ):
         self.message_hash = message_hash
         self.chunk_number = chunk_number
         self.total_chunks = total_chunks
@@ -18,6 +22,7 @@ class ReceivedChunk:
     @staticmethod
     def deserialize(data: bytes):
         return pickle.loads(data)
+
 
 class ReceivedInformation:
     def __init__(self, total_chunks: int, message_hash: bytes):
@@ -38,4 +43,4 @@ class ReceivedInformation:
             raise ValueError("Attempted to Request Incomplete data")
         sorted_chunks = sorted(self.data_list, key=lambda x: x.chunk_number)
         data = list(map(lambda chunk: chunk.data, sorted_chunks))
-        return b''.join(data)
+        return b"".join(data)

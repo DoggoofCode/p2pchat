@@ -1,6 +1,9 @@
-import hashlib, socket, threading
+import hashlib
+import socket
+import threading
 from queue import Queue
-from .packetstruct import ReceivedInformation, ReceivedChunk
+
+from .packetstruct import ReceivedChunk, ReceivedInformation
 
 CHUNK_SIZE = 14 * 1024
 PACKET_LIMIT = 16 * 1024
