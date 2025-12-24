@@ -1,4 +1,6 @@
 import os
+import queue
+import threading
 import unittest
 
 from p2pchat.response.responder import Responder
@@ -6,7 +8,9 @@ from p2pchat.response.responder import Responder
 
 class TestGroupCreation(unittest.TestCase):
     def test_encrypt_decrypt(self):
-        responder = Responder()
+        shutdown = threading.Event()
+        output: queue.Queue[bytes] = queue.Queue()
+        responder = Responder(shutdown, output)
         group_id = os.urandom(16)
         responder.create_message_group(group_id)
         # Save group path
