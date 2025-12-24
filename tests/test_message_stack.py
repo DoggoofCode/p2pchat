@@ -17,6 +17,7 @@ class TestAES(unittest.TestCase):
             b"ved",
             "mrat",
             set_group_id,
+            b"\x00\x00\x00\x00",
         )
         decoded_message = decode_message_wrapper(message.json)
         self.assertEqual(decoded_message["group_id"], set_group_id)
