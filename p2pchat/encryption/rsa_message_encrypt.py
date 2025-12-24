@@ -112,11 +112,13 @@ class MessageWrapper:
         message: Message,
         aes_key: bytes,
         iv: bytes,
+        prev_message: bytes,
     ) -> None:
         self.message_hash: bytes = message_hash
         self.message: Message = message
         self.aes_key: bytes = aes_key
         self.aes_iv: bytes = iv
+        self.prev_message: bytes = prev_message
         self.signature: None = None  # TODO: Create signature
 
     @property
@@ -124,6 +126,7 @@ class MessageWrapper:
         return jsonify.dumps(
             {
                 "message_hash": base64.b64encode(self.message_hash).decode("utf-8"),
+                "prev_message": base64.b64encode(self.prev_message).decode("utf-8"),
                 "message": self.message.dict,
                 "aes_key": base64.b64encode(self.aes_key).decode("utf-8"),
                 "iv": base64.b64encode(self.aes_iv).decode("utf-8"),
@@ -139,6 +142,7 @@ def create_message_wrapper(
     author: bytes,
     message_type: MESSAGE_TYPES,
     group_id: bytes,
+    prev_message: bytes,
 ) -> MessageWrapper:
     rsa_keys: RSAEncryptionKeys = get_rsa_key()
     artifacts: list[Artifact] = []
@@ -172,6 +176,7 @@ def create_message_wrapper(
         message,
         rsa_encrypt_message(common_aes_key, rsa_keys),
         common_iv,
+        prev_message,
     )
 
 
