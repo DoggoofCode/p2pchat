@@ -14,7 +14,6 @@ class TestAES(unittest.TestCase):
             [
                 (b"goon", "txt"),
             ],
-            b"ved",
             "mrat",
             set_group_id,
             b"\x00\x00\x00\x00",
