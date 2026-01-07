@@ -4,8 +4,10 @@ import json as jsonify
 from hashlib import sha256
 from typing import Literal, override
 
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import padding, utils
+from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
 
 from p2pchat.encryption.aes_encryption import aes_decrypt, aes_encrypt
 from p2pchat.encryption.rsa_encryption import get_rsa_key
@@ -29,6 +31,38 @@ def rsa_encrypt_message(information: bytes, keys: RSAEncryptionKeys) -> bytes:
     )
 
     return ciphertext
+
+
+def rsa_sign(information: bytes, keys: RSAEncryptionKeys) -> bytes:
+    signed_text = keys.private_key.sign(
+        information,
+        padding.PSS(
+            mgf=padding.MGF1(algorithm=hashes.SHA256()),
+            salt_length=padding.PSS.MAX_LENGTH,
+        ),
+        utils.Prehashed(hashes.SHA256()),
+    )
+
+    return signed_text
+
+
+def rsa_verify_signature(
+    information: bytes, signature: bytes, public_key: RSAPublicKey
+) -> bool:
+    try:
+        public_key.verify(
+            signature,
+            information,
+            padding.PSS(
+                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                salt_length=padding.PSS.MAX_LENGTH,
+            ),
+            utils.Prehashed(hashes.SHA256()),
+        )
+    except InvalidSignature:
+        print("pluh")
+        return False
+    return True
 
 
 def rsa_decrypt_message(information: bytes, keys: RSAEncryptionKeys) -> bytes:
@@ -76,13 +110,6 @@ class Message:
     ) -> None:
         if not author:
             raise ValueError("Author cannot be empty")
-        # Message hash code no longer needed
-        # if ref_hash and not (message_type == "edit-msg" or message_type == "del-msg"):
-        #     raise ValueError(
-        #         "Ref hash must not be used when message type is not edit-msg or del-msg"
-        #     )
-        # if not ref_hash and (message_type == "edit-msg" or message_type == "del-msg"):
-        #     raise ValueError(f"Ref hash must be bytes for {message_type}")
         self.message_type: MESSAGE_TYPES = message_type
         self.ref_hash: bytes | None = ref_hash
         self.time_stamp: int = int(time_stamp.timestamp())
@@ -119,7 +146,7 @@ class MessageWrapper:
         self.aes_key: bytes = aes_key
         self.aes_iv: bytes = iv
         self.prev_message: bytes = prev_message
-        self.signature: None = None  # TODO: Create signature
+        self.signature: bytes = rsa_sign(message_hash, get_rsa_key())
 
     @property
     def json(self):
@@ -139,7 +166,6 @@ class MessageWrapper:
 
 def create_message_wrapper(
     artifacts_data: list[tuple[bytes, str]],
-    author: bytes,
     message_type: MESSAGE_TYPES,
     group_id: bytes,
     prev_message: bytes,
@@ -149,6 +175,12 @@ def create_message_wrapper(
     combined_hash: bytes = b""
     common_aes_key: bytes = b""
     common_iv: bytes = b""
+
+    keys = get_rsa_key()
+    author_public_key_bytes = keys.public_key.public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
+    )
 
     # Get and encrypt artifact data
     for artifact_data in artifacts_data:
@@ -166,7 +198,7 @@ def create_message_wrapper(
     message = Message(
         message_type,
         datetime.datetime.now(),
-        author=author,
+        author=author_public_key_bytes,
         artifacts=artifacts,
         group_id=group_id,
     )
@@ -184,12 +216,22 @@ def decode_message_wrapper(
     json_data: str,
 ) -> dict:
     # TODO: Verify hash and signature
-
     rsa_keys: RSAEncryptionKeys = get_rsa_key()
     packet_data: dict = jsonify.loads(json_data)
     decrypted_aes_key = rsa_decrypt_message(
         base64.b64decode(packet_data["aes_key"]), rsa_keys
     )
+
+    # Verify hash
+    msg_hash = base64.b64decode(packet_data["message_hash"])
+    signature = base64.b64decode(packet_data["signature"])
+    auth_pub_key_bytes = base64.b64decode(packet_data["message"]["author"])
+    loaded_public_key = serialization.load_pem_public_key(auth_pub_key_bytes)
+    if not isinstance(loaded_public_key, RSAPublicKey):
+        raise ValueError("Invalid public key")
+    if not (rsa_verify_signature(msg_hash, signature, loaded_public_key)):
+        raise ValueError("Invalid hash")
+
     artifacts = [
         {
             "data": aes_decrypt(
