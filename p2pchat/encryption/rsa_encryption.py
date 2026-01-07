@@ -83,8 +83,8 @@ def get_rsa_key() -> RSAEncryptionKeys:
     )
 
     rsa_keys = verify(
-        public_keys_file,
-        private_key_file,
+        public_keys_file.replace(r"/Users/vedjaggi", "~"),
+        private_key_file.replace(r"/Users/vedjaggi", "~"),
     )
 
     return rsa_keys

@@ -1,6 +1,5 @@
 from typing import override
-
-from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey, RSAPublicKey
+from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey, RSAPrivateKey
 
 
 class RSAEncryptionKeys:
