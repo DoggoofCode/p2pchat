@@ -4,8 +4,10 @@ import json as jsonify
 from hashlib import sha256
 from typing import Literal, override
 
+from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives.asymmetric import padding, utils
+from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
 
 from p2pchat.encryption.aes_encryption import aes_decrypt, aes_encrypt
 from p2pchat.encryption.rsa_encryption import get_rsa_key
@@ -29,6 +31,38 @@ def rsa_encrypt_message(information: bytes, keys: RSAEncryptionKeys) -> bytes:
     )
 
     return ciphertext
+
+
+def rsa_sign(information: bytes, keys: RSAEncryptionKeys) -> bytes:
+    signed_text = keys.private_key.sign(
+        information,
+        padding.PSS(
+            mgf=padding.MGF1(algorithm=hashes.SHA256()),
+            salt_length=padding.PSS.MAX_LENGTH,
+        ),
+        utils.Prehashed(hashes.SHA256()),
+    )
+
+    return signed_text
+
+
+def rsa_verify_signature(
+    information: bytes, signature: bytes, public_key: RSAPublicKey
+) -> bool:
+    try:
+        public_key.verify(
+            signature,
+            information,
+            padding.PSS(
+                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                salt_length=padding.PSS.MAX_LENGTH,
+            ),
+            utils.Prehashed(hashes.SHA256()),
+        )
+    except InvalidSignature:
+        print("pluh")
+        return False
+    return True
 
 
 def rsa_decrypt_message(information: bytes, keys: RSAEncryptionKeys) -> bytes:
