@@ -1,6 +1,7 @@
 import queue
 import threading
 import unittest
+
 from p2pchat.packet.packet_communicator import PacketGateway
 
 

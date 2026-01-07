@@ -1,11 +1,13 @@
-import hashlib, socket, threading
+import hashlib
+import socket
+import threading
 from queue import Queue
-from .packetstruct import ReceivedInformation, ReceivedChunk
+
+from .packetstruct import ReceivedChunk, ReceivedInformation
 
 CHUNK_SIZE = 14 * 1024
 PACKET_LIMIT = 16 * 1024
 PORT = 6767
-ADDRESS = ("127.0.0.1", PORT)
 
 
 class PacketGateway:
@@ -13,7 +15,7 @@ class PacketGateway:
         self,
         shutdown_callback,
         *,
-        host="127.0.0.1",
+        host="0.0.0.0",
         port=6767,
     ):
         self.address = (host, port)
@@ -54,7 +56,9 @@ class PacketGateway:
             except Exception as e:
                 print(f"[Gateway] Receiver error: {e}")
 
-    def send(self, data: bytes, target_address: tuple[str, int] = ("127.0.0.1", PORT)):
+    def send(
+        self, data: bytes, target_address: tuple[str, int] | str = ("127.0.0.1", PORT)
+    ):
         data_hash = hashlib.sha256(data).digest()  # 32 byte hash
 
         total_chunks = (len(data) + CHUNK_SIZE - 1) // CHUNK_SIZE
@@ -70,6 +74,8 @@ class PacketGateway:
                 raise ValueError("Serialized packet exceeds 16 KiB limit")
 
             if not self.shutdown_callback.is_set():
+                if isinstance(target_address, str):
+                    target_address = (target_address, PORT)
                 self.sender_sock.sendto(serialized, target_address)
 
     def close_socks(self):

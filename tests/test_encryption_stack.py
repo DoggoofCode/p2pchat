@@ -21,8 +21,8 @@ class TestRSAEncryption(unittest.TestCase):
         )
 
         keys: RSAEncryptionKeys = verify(
-            public_keys_file.replace(r"/Users/vedjaggi", "~"),
-            private_key_file.replace(r"/Users/vedjaggi", "~"),
+            public_keys_file,
+            private_key_file,
         )
 
         original_text = b"Goon"
