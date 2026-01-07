@@ -1,7 +1,5 @@
 import unittest
-
-from p2pchat.encryption.aes_encryption import aes_decrypt, aes_encrypt
-
+from p2pchat.encryption.aes_encryption import aes_encrypt, aes_decrypt
 
 class TestAES(unittest.TestCase):
     def test_encrypt_decrypt(self):
