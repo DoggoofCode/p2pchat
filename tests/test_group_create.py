@@ -10,7 +10,7 @@ class TestGroupCreation(unittest.TestCase):
     def test_encrypt_decrypt(self):
         shutdown = threading.Event()
         output: queue.Queue[bytes] = queue.Queue()
-        responder = Responder(shutdown, output)
+        responder = Responder(shutdown, output, None)
         group_id = os.urandom(16)
         responder.create_message_group(group_id)
         # Save group path
