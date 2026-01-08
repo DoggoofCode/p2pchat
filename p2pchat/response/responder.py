@@ -8,16 +8,33 @@ import threading
 from p2pchat.encryption.rsa_message_encrypt import (
     decode_message_wrapper,
 )
+from p2pchat.packet.packet_communicator import PacketGateway
+from p2pchat.response.message_group import GrpFiles
 
 
 class Responder:
     MESSAGE_GROUPS: dict[bytes, str] = {}
+    MESSAGE_GROUPS_LOGS: list[GrpFiles] = []
 
     def __init__(
-        self, shutdown_callback: threading.Event, output_queue: queue.Queue
+        self,
+        shutdown_callback: threading.Event,
+        output_queue: queue.Queue,
+        comm: PacketGateway | None,
     ) -> None:
         self.shut_down_callback = shutdown_callback
         self.output_queue = output_queue
+        if comm is None:
+            self.comm = None
+            print(
+                "No communication gateway provided, no messages will be sent as a response"
+            )
+        else:
+            self.comm = comm
+            self.responder_thread = threading.Thread(
+                target=self._response_loop,
+            )
+            self.responder_thread.start()
 
     def __getitem__(self, name: bytes, /) -> str:
         return self.MESSAGE_GROUPS[name]
@@ -47,6 +64,7 @@ class Responder:
         with open(group_setting_file, "w") as f:
             f.write("{}")
 
+        self.MESSAGE_GROUPS_LOGS.append(GrpFiles(filepath=group_path))
         self.MESSAGE_GROUPS[group_unique_id] = group_path
 
     def delete_local_group_message(self, group_unique_id: bytes) -> None:
@@ -61,19 +79,22 @@ class Responder:
 
     def _index_local_group_message(self) -> None:
         # Index all local groups
-        for group_path in os.walk(
-            os.path.join(os.getcwd(), "user_data", "user_groups")
-        ):
+        group_paths = os.walk(os.path.join(os.getcwd(), "user_data", "user_groups"))
+        for group_path in group_paths:
+            print(group_path)
+            if group_path[0].split("/")[-1] == "user_groups":
+                continue
             group_unique_id = self._filevalid_base64_decode(
                 group_path[0].split("/")[-1]
             )
             self.MESSAGE_GROUPS[group_unique_id] = group_path[0]
+        print("Indexing complete")
 
     def _response_loop(self) -> None:
         self._index_local_group_message()
         while not self.shut_down_callback.is_set():
             try:
-                message = self.output_queue.get()
+                message = self.output_queue.get(timeout=0.5)
                 self._process_message(message)
             except queue.Empty:
                 continue
@@ -82,7 +103,21 @@ class Responder:
         while not self.output_queue.empty():
             self.output_queue.get()
 
-    def _process_message(self, message: bytes) -> None:
-        # original_json_dict = json.loads(message.decode())
-        # message_wrapper = decode_message_wrapper(message.decode())
+    def _message_ratification(self, original_json, inner_message):
+        # TODO: Check own position in the group (ratifier / user)
         pass
+
+    def _message_ratification_response(self, original_json, inner_message):
+        # Implement message ratification response logic here
+        pass
+
+    def _process_message(self, message: bytes) -> None:
+        # Only message packets (green fn)
+        original_json = json.loads(message.decode())
+        inner_message = decode_message_wrapper(message.decode())
+        if inner_message["message_type"] == "mrat":
+            self._message_ratification(original_json, inner_message)
+        elif inner_message["message_type"] == "mratR":
+            pass
+        else:
+            raise ValueError(f"Unknown message type: {inner_message['message_type']}")
