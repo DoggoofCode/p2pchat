@@ -169,6 +169,8 @@ def create_message_wrapper(
     message_type: MESSAGE_TYPES,
     group_id: bytes,
     prev_message: bytes,
+    *,
+    ref_hash: bytes | None = None
 ) -> MessageWrapper:
     rsa_keys: RSAEncryptionKeys = get_rsa_key()
     artifacts: list[Artifact] = []
@@ -201,6 +203,7 @@ def create_message_wrapper(
         author=author_public_key_bytes,
         artifacts=artifacts,
         group_id=group_id,
+        ref_hash = ref_hash
     )
     # Send message wrapper
     return MessageWrapper(
@@ -244,6 +247,7 @@ def decode_message_wrapper(
         for art in packet_data["message"]["artifact"]
     ]
     return {
+        # "message_hash":msg_hash,
         "message_type": packet_data["message"]["message_type"],
         "time_stamp": datetime.datetime.fromtimestamp(
             int(packet_data["message"]["time_stamp"])
@@ -251,7 +255,7 @@ def decode_message_wrapper(
         "author": base64.b64decode(packet_data["message"]["author"]).decode("utf-8"),
         "ref-hash": None
         if not packet_data["message"]["ref_hash"]
-        else base64.b64decode(packet_data["message"]["ref_hash"]).decode("utf-8"),
+        else base64.b64decode(packet_data["message"]["ref_hash"]),
         "headers": packet_data["message"]["headers"],
         "artifact": artifacts,
         "group_id": base64.b64decode(packet_data["message"]["group_id"]),

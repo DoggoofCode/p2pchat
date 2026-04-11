@@ -112,7 +112,7 @@ _This type of packet is used to update the message log. All sensitive informatio
         "response_code": 0 // Positive (0) or negative response (Any other response)
       },
       "artifact": {
-        "type": "String", // Type of artifact, one of the artifact types, currently "txt", "md", "png"
+        "type": "String", // Any supported mime type for now 'text/markdown'
         "data": "B64 Encoded String", // B64 Encoded String of the artifact data encrypted with AES key
         "hash": "B64 Encoded String" // Hash of the artifact data encrypted with AES key
       },

@@ -4,8 +4,10 @@ import os
 import queue
 import shutil
 import threading
+import asyncio as aio
 
 from p2pchat.encryption.rsa_message_encrypt import (
+    create_message_wrapper,
     decode_message_wrapper,
 )
 from p2pchat.packet.packet_communicator import PacketGateway
@@ -26,15 +28,14 @@ class Responder:
         self.output_queue = output_queue
         if comm is None:
             self.comm = None
-            print(
-                "No communication gateway provided, no messages will be sent as a response"
-            )
         else:
             self.comm = comm
             self.responder_thread = threading.Thread(
                 target=self._response_loop,
             )
             self.responder_thread.start()
+            self.promised_responses: dict[tuple[bytes, bytes], aio.Future] = {}
+            self.loop = aio.get_running_loop()  
 
     def __getitem__(self, name: bytes, /) -> str:
         return self.MESSAGE_GROUPS[name]
@@ -81,14 +82,13 @@ class Responder:
         # Index all local groups
         group_paths = os.walk(os.path.join(os.getcwd(), "user_data", "user_groups"))
         for group_path in group_paths:
-            print(group_path)
             if group_path[0].split("/")[-1] == "user_groups":
                 continue
             group_unique_id = self._filevalid_base64_decode(
                 group_path[0].split("/")[-1]
             )
+            self.MESSAGE_GROUPS_LOGS.append(GrpFiles(filepath=group_path[0]))
             self.MESSAGE_GROUPS[group_unique_id] = group_path[0]
-        print("Indexing complete")
 
     def _response_loop(self) -> None:
         self._index_local_group_message()
@@ -107,6 +107,46 @@ class Responder:
         # TODO: Check own position in the group (ratifier / user)
         pass
 
+    def _message_identifier(self, original_json, inner_message):
+        pass        
+        
+    # TODO: Create allow sending real message
+    async def send_message_identifier(self):
+        # Create promise in response routine
+        future = aio.get_running_loop().create_future()
+        message = create_message_wrapper(
+            [(b"I WANT A REPONSE", "text/markdown")],
+            "mrat",
+            b"\x00",            
+            b"\x00",
+            ref_hash=b""
+        )
+        self.comm.send(message.json.encode())
+        self.promised_responses[(message.message_hash, message.message.group_id)] = future  # register first
+        await self.promised_responses[(message.message_hash, message.message.group_id)]
+        return future.result()
+
+    
+
+    def _response_routine_handler(self, original_json, inner_message):
+        # Ref hash _then_ group id
+        packet_id = (inner_message["ref-hash"], inner_message["group_id"])
+        if packet_id in self.promised_responses:
+            future = self.promised_responses.pop(packet_id)
+            self.loop.call_soon_threadsafe(future.set_result, original_json)
+        else:
+            print(f"Whoops, no handler found for {inner_message}")
+
+    def _message_ratification(self, original_json, inner_message):
+        message = create_message_wrapper(
+            [(b"you got your response diddyblud", "text/markdown")],
+            "mratR",
+            b"\x00",            
+            b"\x00",
+            ref_hash=base64.b64decode(original_json["message_hash"])
+        )
+        self.comm.send(message.json.encode())
+
     def _message_ratification_response(self, original_json, inner_message):
         # Implement message ratification response logic here
         pass
@@ -115,9 +155,14 @@ class Responder:
         # Only message packets (green fn)
         original_json = json.loads(message.decode())
         inner_message = decode_message_wrapper(message.decode())
-        if inner_message["message_type"] == "mrat":
+        message_type = inner_message["message_type"]
+        if message_type == "mrat":
             self._message_ratification(original_json, inner_message)
-        elif inner_message["message_type"] == "mratR":
+        elif message_type == "i":
+            self._message_identifier(original_json, inner_message)
+        elif message_type == "iR":
             pass
+        elif message_type[-1] == 'R':
+            self._response_routine_handler(original_json, inner_message)
         else:
             raise ValueError(f"Unknown message type: {inner_message['message_type']}")
