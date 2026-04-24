@@ -1,0 +1,19 @@
+
+label main:
+    set [index] 5;
+    set [prod] 1;
+    goto loop;
+    label loop:
+        set stdout [index];
+        sig flush;
+
+        mul [prod] 3;
+        sub [index] 1;
+        gt [index] 0;
+        cjmp loop;
+        ret;
+
+    set stdout [prod];
+    sig flush;
+    set a 0;
+    sig exit;

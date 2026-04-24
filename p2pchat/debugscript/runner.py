@@ -27,10 +27,10 @@ class Token:
         return f"Token({self.type}, {repr(self.text)}, {self.subtype})"
 
     def real_val(
-        self, variable_dictionary: dict[str, str], reg: dict[str, str | float]
+        self, variable_dictionary: dict[str, str | float], reg: dict[str, str | float]
     ) -> str | float:
         if self.type == "m":
-            if mem_loc := variable_dictionary.get(self.t[1:-1]):
+            if (mem_loc := variable_dictionary.get(self.t[1:-1])) is not None:
                 return mem_loc
         elif self.type == "o" and self.subtype == "reg":
             return reg[self.t]
@@ -59,7 +59,7 @@ def err(msg: str, line: int):
 
 
 def run(command: str):
-    variable_dictionary = {"testvar": "goon"}
+    variable_dictionary: dict[str, str | float] = {"testvar": "goon"}
     dbg = False
 
     statement_token: list[str] = [i for i in command.replace(":", ";").split(";")]
@@ -116,7 +116,7 @@ def run(command: str):
     token_array = [t for t in token_array if t]
 
     # Set up regs
-    reg = {
+    reg: dict[str, str | float] = {
         # Used for stdin and stdout
         "stdout": "",
         "stdin": "",
@@ -163,7 +163,7 @@ def run(command: str):
         err("No main label", 0)
         return
 
-    while line_num < len(token_array):
+    while line_num + 1 < len(token_array):
         line_num += 1
         if not (t_op_buffer := token_array[line_num]):
             continue
@@ -171,7 +171,7 @@ def run(command: str):
 
         if dbg:
             print(
-                f"Line:{line_num} Operation: {op_buffer}: \x1b[2m\n\tRegs: {reg}\n\tVariables: {variable_dictionary}\n\tCallback: {call_back}\x1b[0m"
+                f"Line:{line_num} Operation: {op_buffer}: \x1b[2m\n\tRegs: {reg}\n\tVariables: {variable_dictionary}\n\tCallback: {call_back[:10]}\x1b[0m"
             )
 
         match op_buffer[0]:
@@ -290,7 +290,7 @@ def run(command: str):
                     reg["r"] = 1
                 else:
                     reg["r"] = 0
-            case "gt":
+            case "gt" | "lt":
                 value1 = t_op_buffer[1].real_val(variable_dictionary, reg)
                 value2 = t_op_buffer[2].real_val(variable_dictionary, reg)
                 if isinstance(value1, int):
@@ -298,16 +298,10 @@ def run(command: str):
                 if isinstance(value2, int):
                     value2 = float(value2)
                 if isinstance(value1, type(value2)):
-                    reg["r"] = 1 if value1 > value2 else 0  # pyright: ignore[reportOperatorIssue]
-            case "lt":
-                value1 = t_op_buffer[1].real_val(variable_dictionary, reg)
-                value2 = t_op_buffer[2].real_val(variable_dictionary, reg)
-                if isinstance(value1, int):
-                    value1 = float(value1)
-                if isinstance(value2, int):
-                    value2 = float(value2)
-                if isinstance(value1, type(value2)):
-                    reg["r"] = 1 if value1 < value2 else 0  # pyright: ignore[reportOperatorIssue]
+                    if op_buffer[0] == "gt":
+                        reg["r"] = 1 if value1 > value2 else 0  # pyright: ignore[reportOperatorIssue]
+                    else:
+                        reg["r"] = 1 if value1 < value2 else 0  # pyright: ignore[reportOperatorIssue]
             case "cjmp":
                 if reg["r"] == 1:
                     if new_line_num := labels.get(op_buffer[1]):
@@ -317,6 +311,90 @@ def run(command: str):
                     else:
                         err(f"No identier {op_buffer[1]}", line_num)
                         return
+            # Math
+            case "add" | "sub":
+                val2: float
+                if op_buffer[2] in list(reg.keys()):
+                    if not isinstance(temp := reg[op_buffer[2]], float):
+                        err(
+                            f"Cannot add non-float reg:{op_buffer[2]} \x1b[2mValue: {reg[op_buffer[2]]}\x1b[0m",
+                            line_num,
+                        )
+                        return
+                    else:
+                        val2 = temp
+                elif is_mem(t_op_buffer[2]):
+                    val2 = float(t_op_buffer[2].real_val(variable_dictionary, reg))
+                else:
+                    # Cannot save to literal
+                    if t_op_buffer[2].subtype != "float":
+                        err(f"Cannot add non float {op_buffer[2]}", line_num)
+                    val2 = float(t_op_buffer[2].t)
+
+                if op_buffer[0] == "sub":
+                    val2 = -val2
+
+                if op_buffer[1] in list(reg.keys()):
+                    reg_val = reg[op_buffer[1]]
+                    if isinstance(reg_val, float):
+                        reg[op_buffer[1]] = reg_val + val2
+                    else:
+                        err(
+                            f"Cannot add non-float reg:{op_buffer[1]} \x1b[2mValue: {reg[op_buffer[1]]}\x1b[0m",
+                            line_num,
+                        )
+                        return
+                elif is_mem(t_op_buffer[1]):
+                    variable_dictionary[op_buffer[1][1:-1]] = (
+                        float(t_op_buffer[1].real_val(variable_dictionary, reg)) + val2
+                    )
+                else:
+                    # Cannot save to literal
+                    err(
+                        f"Cannot add {op_buffer[2]} to literal {op_buffer[1]}", line_num
+                    )
+                    return
+            case "mul" | "div":
+                if op_buffer[2] in list(reg.keys()):
+                    if not isinstance(temp := reg[op_buffer[2]], float):
+                        err(
+                            f"Cannot add non-float reg:{op_buffer[2]} \x1b[2mValue: {reg[op_buffer[2]]}\x1b[0m",
+                            line_num,
+                        )
+                        return
+                    else:
+                        val2 = temp
+                elif is_mem(t_op_buffer[2]):
+                    val2 = float(t_op_buffer[2].real_val(variable_dictionary, reg))
+                else:
+                    # Cannot save to literal
+                    if t_op_buffer[2].subtype != "float":
+                        err(f"Cannot add non float {op_buffer[2]}", line_num)
+                    val2 = float(t_op_buffer[2].t)
+
+                if op_buffer[0] == "div":
+                    val2 = 1 / val2
+
+                if op_buffer[1] in list(reg.keys()):
+                    reg_val = reg[op_buffer[1]]
+                    if isinstance(reg_val, float):
+                        reg[op_buffer[1]] = reg_val * val2
+                    else:
+                        err(
+                            f"Cannot add non-float reg:{op_buffer[1]} \x1b[2mValue: {reg[op_buffer[1]]}\x1b[0m",
+                            line_num,
+                        )
+                        return
+                elif is_mem(t_op_buffer[1]):
+                    variable_dictionary[op_buffer[1][1:-1]] = (
+                        float(t_op_buffer[1].real_val(variable_dictionary, reg)) * val2
+                    )
+                else:
+                    # Cannot save to literal
+                    err(
+                        f"Cannot add {op_buffer[2]} to literal {op_buffer[1]}", line_num
+                    )
+                    return
             case _:
                 print(
                     f"[DEBUG SCRIPT] Operator '\x1b[1m{op_buffer[0]}\x1b[0m' not recognized \x1b[2m(args: {' '.join(op_buffer[1:])})\x1b[0m"
