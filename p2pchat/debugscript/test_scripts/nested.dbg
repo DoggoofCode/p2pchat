@@ -1,0 +1,10 @@
+
+label main:
+    goto truebranch;
+    label truebranch:
+        set stdout "bruh";
+        sig flush;
+        ret;
+
+    set a 0;
+    sig exit;
