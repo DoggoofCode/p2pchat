@@ -1,9 +1,9 @@
 
 label main:
-    goto truebranch;
-    label truebranch:
+    goto _;
+    label _:
         set stdout "bruh";
-        sig flush;
+        sig flushnl;
         ret;
 
     set a 0;

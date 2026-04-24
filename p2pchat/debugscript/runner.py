@@ -1,4 +1,4 @@
-from dbg_stdlib import FUNCTIONS
+from dbg_stdlib import FUNCTIONS, MACROS
 
 
 class Token:
@@ -62,58 +62,78 @@ def run(command: str):
     variable_dictionary: dict[str, str | float] = {"testvar": "goon"}
     dbg = False
 
-    statement_token: list[str] = [i for i in command.replace(":", ";").split(";")]
-    if statement_token[-1].isspace():
-        statement_token = statement_token[:-1]
+    for macro_name, replacement in MACROS.items():
+        command = command.replace(f"&{macro_name}", replacement)
 
-    token_array: list[list[Token]] = []
-    for index, command in enumerate(statement_token):
-        char_pointer: int = 0
-        token: str = ""
-        # Add new array for instruction
-        token_array.append([])
-
-        # Tokenizer
-        while char_pointer < len(command):
-            # We KNOW the next one must be a operator
-            if len(token_array[-1]) > 0 and token_array[-1][-1].t in ["sig", "label"]:
-                while char_pointer < len(command) and command[char_pointer] != " ":
-                    token += command[char_pointer]
-                    char_pointer += 1
-                if token_array[-1][-1].t == "sig":
-                    token_array[-1].append(Token("o", token, "signal"))
-                elif token_array[-1][-1].t == "label":
-                    token_array[-1].append(Token("o", token, "label_name"))
-                token = ""
-            elif command[char_pointer] in ["\n", "\t"]:
-                pass
-            elif command[char_pointer] == "$":
-                char_pointer = len(command)
-                continue
-            elif command[char_pointer] == '"' and not token:
-                char_pointer += 1
-                while command[char_pointer] != '"':
-                    token += command[char_pointer]
-                    char_pointer += 1
-                token_array[-1].append(Token("l", token, "str"))
-                token = ""
-            elif command[char_pointer] == "[" and not token:
-                while command[char_pointer] != "]":
-                    token += command[char_pointer]
-                    char_pointer += 1
-                token_array[-1].append(Token("m", token + "]"))
-                token = ""
-            elif command[char_pointer] == " ":
-                if token:
-                    token_array[-1].append(Token.AutoType(token))
-                    token = ""
-            else:
+    token_array: list[list[Token]] = [[]]
+    char_pointer: int = 0
+    token: str = ""
+    while char_pointer < len(command):
+        letter = command[char_pointer]
+        if len(token_array[-1]) > 0 and token_array[-1][-1].t in [
+            "sig",
+            "label",
+            "cjmp",
+            "goto",
+        ]:
+            while char_pointer < len(command) and (
+                command[char_pointer].isalnum() or command[char_pointer] in ["-", "_"]
+            ):
                 token += command[char_pointer]
+                char_pointer += 1
+            if token_array[-1][-1].t == "sig":
+                token_array[-1].append(Token("o", token, "signal"))
+            elif token_array[-1][-1].t in ["label", "cjmp", "goto"]:
+                token_array[-1].append(Token("o", token, "label_name"))
+            char_pointer -= 1
+            token = ""
+        elif letter in [";", ":"]:
+            if token:
+                token_array[-1].append(Token.AutoType(token))
+                token = ""
+            token_array.append([])
             char_pointer += 1
-        if token:
-            token_array[-1].append(Token.AutoType(token))
+        elif letter in ["\n", "\t"]:
+            pass
+        elif letter == "$":
+            while command[char_pointer] != "\n":
+                char_pointer += 1
+            char_pointer += 1
+        elif command[char_pointer] == '"' and not token:
+            char_pointer += 1
+            while command[char_pointer] != '"':
+                token += command[char_pointer]
+                char_pointer += 1
+            token_array[-1].append(Token("l", token, "str"))
+            token = ""
+        elif command[char_pointer] == "[" and not token:
+            while command[char_pointer] != "]":
+                token += command[char_pointer]
+                char_pointer += 1
+            token_array[-1].append(Token("m", token + "]"))
+            token = ""
+        elif command[char_pointer] == " ":
+            if token:
+                token_array[-1].append(Token.AutoType(token))
+                token = ""
+        else:
+            token += letter
+        char_pointer += 1
+    if token:
+        token_array[-1].append(Token.AutoType(token))
 
     token_array = [t for t in token_array if t]
+
+    # Rename anonymous function
+    anon_rename = 0
+    for index, statement in enumerate(token_array):
+        for tk_index in range(len(statement)):
+            tk = statement[tk_index]
+            if tk.subtype == "label_name" and tk.t == "_":
+                # Found a anon label
+                statement[tk_index].text = f"ANON_LABEL{anon_rename}"
+                if statement[tk_index - 1].t == "label":
+                    anon_rename += 1
 
     # Set up regs
     reg: dict[str, str | float] = {
@@ -222,33 +242,20 @@ def run(command: str):
                     return
             case "sig":
                 match op_buffer[1]:
-                    case "flush":
-                        print(reg["stdout"])
                     case "exit":
                         print(
-                            f"{'\x1b[31m' if int(reg['a']) != 0 else ''}Exit code: {reg['a']}\x1b[0m"
+                            f"{'\x1b[31m' if int(reg['a']) != 0 else ''}Exit:{reg['a']}\x1b[0m"
                         )
-                        return None
-                    case "wait":
-                        input("Press any key to continue...")
-                        continue
-                    case "toFloat":
-                        try:
-                            reg["a"] = float(reg["a"])
-                        except ValueError:
-                            reg["r"] = 0
-                    case "toStr":
-                        try:
-                            reg["a"] = str(reg["a"])
-                        except ValueError:
-                            reg["r"] = 0
+                        return
                     case _:
                         found = False
                         for name, func in FUNCTIONS.items():
                             if op_buffer[1] == name:
                                 found = True
                                 func(reg)
-                        if not found:
+                        if found:
+                            continue
+                        else:
                             err(
                                 f"Signal {op_buffer[1]} not found, trying checking linked libraries",
                                 line_num,

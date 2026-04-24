@@ -1,0 +1,14 @@
+
+label main:
+    set p1 "stdin";
+    sig input;
+    sig mk_flt;
+
+    eq 0 0; &if:
+        set stdout "You inputted- "; sig flush;
+        set stdout stdin; sig flush;
+        set stdout "\n"; sig flush;
+    ret;
+
+    set a 0;
+    sig exit;

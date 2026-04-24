@@ -1,0 +1,4 @@
+
+label main:
+    set a b;
+    sig exit;
