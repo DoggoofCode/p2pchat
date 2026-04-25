@@ -1,22 +1,17 @@
 label main:
     set [firsterror] 1;
-    goto get_input;
-    label get_input:
+    goto _; label _:
         $ print reenter message;
-        eq [firsterror] 0;
-        cjmp print_reenter_message;
-        label print_reenter_message:
+        eq [firsterror] 0; &if:
             set stdout "Please reinput";
             sig flushnl;
-            ret;
+        ret;
 
-        eq [firsterror] 1;
-        cjmp reentry;
-        label reentry:
+        eq [firsterror] 1; &if:
             set [firsterror] 0;
-            ret;
+        ret;
 
-        $ reset r;
+        $ reset r
         set p1 "a";
         set r 0;
 
@@ -34,7 +29,7 @@ label main:
 
         eq r -1;
         cjmp get_input;
-        ret;
+    ret;
 
     $ one is greater than two;
     gt [val1] [val2];

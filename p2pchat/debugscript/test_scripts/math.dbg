@@ -1,8 +1,9 @@
+#link stdlib.py
 
 label main:
     set [index] 5;
     set [prod] 1;
-    goto loop;
+    jmp loop;
     label loop:
         set stdout [index];
         sig flushnl;
@@ -11,9 +12,8 @@ label main:
         sub [index] 1;
         gt [index] 0;
         cjmp loop;
-        ret;
+    ret;
 
     set stdout [prod];
     sig flushnl;
-    set a 0;
-    sig exit;
+    ret;

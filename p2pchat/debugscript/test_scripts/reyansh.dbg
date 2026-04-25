@@ -1,0 +1,30 @@
+#link stdlib.py
+
+label main:
+    % create a var called hello
+    set [hello] 0;
+    set a [hello];
+
+    % add 3 to hello
+    add a -49;
+    set [hello] 100;
+
+    gt [hello] 2;
+    cjmp v;
+    label v:
+        % print hello
+        label secondorder1:
+        ret;
+        label secondorder2:
+            set a 0;
+        ret;
+        set stdout [hello];
+        sig flushnl;
+    ret;
+    label t:
+
+    ret;
+
+    % we exit here
+    set a 0;
+    ret;
