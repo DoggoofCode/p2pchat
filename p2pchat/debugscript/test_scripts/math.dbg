@@ -1,19 +1,19 @@
-#link stdlib.py
+#link stdlib
 
 label main:
-    set [index] 5;
-    set [prod] 1;
-    jmp loop;
-    label loop:
-        set stdout [index];
-        sig flushnl;
+    set a 7;
+    set [ten] 10;
+    mul a [ten];
+    mul a 1000;
+    sub a 1000;
 
-        mul [prod] 3;
-        sub [index] 1;
-        gt [index] 0;
-        cjmp loop;
-    ret;
+    set b 4200;
+    div b 10;
 
-    set stdout [prod];
+    set stdout a;
+    add stdout b;
     sig flushnl;
-    ret;
+
+    set stdout "Expected output 69420";
+    sig flushnl;
+ret;

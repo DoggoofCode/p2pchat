@@ -1,3 +1,4 @@
+import argparse
 import os
 import re
 import sys
@@ -17,10 +18,14 @@ OPERATORS = {
     "jmp": (1, 1),
     "label": (1, 1),
     "ret": (0, 0),
+    "pop": (0, 0),
+    "push": (0, 0),
     "gt": (2, 2),
     "lt": (2, 2),
     "eq": (2, 2),
     "cjmp": (1, 1),
+    "hjmp": (0, 0),
+    "chjmp": (0, 0),
     "add": (2, 2),
     "sub": (2, 2),
     "div": (2, 2),
@@ -71,7 +76,10 @@ class Token:
 
 
 def mem_addr(x: str) -> bool:
-    return x[-1] == "]" and x[0] == "["
+    if x:
+        return x[-1] == "]" and x[0] == "["
+    else:
+        return False
 
 
 class Identifier(str):
@@ -95,12 +103,6 @@ class Identifier(str):
 
 
 class Registers:
-    # stdin: DataType
-    # stdout: DataType
-    # a: DataType
-    # b: DataType
-    # c: DataType
-    # result: DataType
     _regs: dict[str, DataType] = {
         "stdin": "",
         "stdout": "",
@@ -111,6 +113,17 @@ class Registers:
         "accumulator": 0,
     }
     _parameters: list[DataType] = []
+
+    def __init__(self) -> None:
+        self._regs = {
+            "stdin": "",
+            "stdout": "",
+            "a": "",
+            "b": "",
+            "c": "",
+            "result": 0,
+            "accumulator": 0,
+        }
 
     def set(self, name: str, value: DataType) -> None:
         if name[0] == "p":
@@ -131,7 +144,8 @@ class Registers:
 
 
 class VariableScope:
-    variables: dict[Identifier, DataType] = {}
+    def __init__(self) -> None:
+        self.variables: dict[Identifier, DataType] = {}
 
     def add(self, name: Identifier, value: DataType) -> None:
         self.variables[name] = value
@@ -161,6 +175,7 @@ class LabelNode:
         self.children = []
 
     def search(self, name: str) -> int | None:
+        # Returns the index of the main label
         for i, c in enumerate(self.children):
             if c.name == name:
                 return i
@@ -189,13 +204,15 @@ class Interpreter:
         self.raw_script: str
         self.real_ln: list[int] = []
         self.base_node = LabelNode("HEAD", 0, 0)
-        self.callback_stack: list[int] = [-1]
+        self.all_label_node = LabelNode("HEAD", 0, 0)
+        self.callback_stack: list[tuple[int, bool]] = [(-1, True)]
         self.token_array: list[list[Token]] = []
         self.regs: Registers = Registers()
         self.reg_stack: list[Registers] = []
         self.variable_scope: VariableScope = VariableScope()
         self.variable_stack: list[VariableScope] = []
         self.sig_functions: dict[str, Callable] = {}
+        self.runtime_sum: int = 0
 
     def err(self, line: int, message: str) -> None:
         print(f"\x1b[31mFatal Error @ Line {self.real_ln[line]}: {message}")
@@ -213,6 +230,8 @@ class Interpreter:
                     pass
                 case "link":
                     file_path = f"{'/'.join(__file__.split('/')[:-1])}/{split_flag[1]}"
+                    if not file_path.endswith(".py"):
+                        file_path += ".py"
                     # Add the directory of the target file to sys.path
                     module_dir = os.path.dirname(file_path)
                     module_name = os.path.splitext(os.path.basename(file_path))[0]
@@ -323,8 +342,6 @@ class Interpreter:
                         self.token_array[-1].append(Token.AutoLiteral(command[2]))
                 case "label" | "jmp" | "cjmp":
                     self.token_array[-1].append(Token("i", command[1], "label"))
-                case "ret" | "push" | "pop":
-                    pass
                 case "sig":
                     # add the first op as a signal
                     self.token_array[-1].append(Token("i", command[1], "signal"))
@@ -378,10 +395,30 @@ class Interpreter:
                                 index,
                                 f"Tried to compare with non-float literal '\x1b[3m{command[2]}\x1b[23m'",
                             )
+                case "ret" | "push" | "pop" | "cjmp" | "chjmp":
+                    pass
                 case _:
                     self.err(
                         index, f"Operator not recognized: '\x1b[3m{operator}\x1b[23m'"
                     )
+
+        # PASS 3 Resolve Anonymous Labels
+        anonymous_counter: int = 0
+        for index, instruction in enumerate(self.token_array):
+            for op_idx, op in enumerate(instruction):
+                if op.subtype == "label" and op.st[0] == "_" and len(op.st) < 2:
+                    if (
+                        instruction[op_idx - 1].text == "cjmp"
+                        or instruction[op_idx - 1].text == "jmp"
+                    ):
+                        self.token_array[index][
+                            op_idx
+                        ].text = f"_anon{anonymous_counter}"
+                    if instruction[op_idx - 1].st == "label":
+                        self.token_array[index][
+                            op_idx
+                        ].text = f"_anon{anonymous_counter}"
+                        anonymous_counter += 1
 
         if self.debug:
             print(
@@ -402,7 +439,7 @@ class Interpreter:
             self.print_label_tree(c, depth + 1)
 
     def label_search(self, command_line: int) -> LabelNode:
-        target_label = self.base_node
+        target_label = self.all_label_node
         node_idx: int | None = target_label.int(command_line)
         while node_idx is not None:
             target_label = target_label.children[node_idx]
@@ -444,20 +481,40 @@ class Interpreter:
                 if grp[1] < label_grp[1]:
                     # Meaning it is close thus its parent
                     parent_stack.append(grp[0])
+
             if not parent_stack:
-                self.base_node.new_child(LabelNode(*label_grp))
+                if label_grp[0][0] != "_":
+                    self.base_node.new_child(LabelNode(*label_grp))
+                self.all_label_node.new_child(LabelNode(*label_grp))
             else:
                 target_node: LabelNode = self.base_node
+                all_target_node: LabelNode = self.all_label_node
                 while parent_stack:
-                    if (new_target := target_node.search(parent_stack.pop(0))) is None:
-                        self.err(0, "Labels incorrectly generated")
+                    popped_parent = parent_stack.pop(0)
+                    if popped_parent[0] != "_":
+                        new_target = target_node.search(popped_parent)
                     else:
-                        target_node = target_node.children[new_target]
-                target_node.new_child(LabelNode(*label_grp))
+                        new_target = -1
+                    new_all_target = all_target_node.search(popped_parent)
+                    if new_target is None or new_all_target is None:
+                        self.err(
+                            0,
+                            "Labels in parent stack not found when walking to said parent node",
+                        )
+                        return
+                    else:
+                        if new_target > 0:
+                            target_node = target_node.children[new_target]
+                        all_target_node = all_target_node.children[new_target]
+                if label_grp[0][0] != "_":
+                    target_node.new_child(LabelNode(*label_grp))
+                all_target_node.new_child(LabelNode(*label_grp))
 
         if self.debug:
-            print("\x1b[1mLabel Tree\x1b[0m")
+            print("\x1b[1mNo-Anon Label Tree\x1b[0m")
             self.print_label_tree(self.base_node)
+            print("\x1b[1mAll Label Tree\x1b[0m")
+            self.print_label_tree(self.all_label_node)
 
     @overload
     def getval(
@@ -505,9 +562,10 @@ class Interpreter:
         if main_label is None:
             self.err(0, "No main label found. Please ensure a main label exists")
             return
-        row_ptr: int = main_label + 1
+        row_ptr: int = self.base_node.children[main_label].start + 1
 
         while row_ptr < len(self.token_array):
+            self.runtime_sum += 1
             operation: list[Token] = self.token_array[row_ptr]
             operand: Token = operation[0]
             params: list[Token] = operation[1:]
@@ -611,12 +669,38 @@ class Interpreter:
                         continue
 
                     parent_node: LabelNode = self.base_node
+                    grandparent_node: LabelNode = self.base_node
                     next_node_index: int | None = parent_node.int(row_ptr)
-                    while next_node_index is not None:
-                        parent_node = parent_node.children[next_node_index]
-                        next_node_index = parent_node.int(row_ptr)
 
-                    valid_jmp = parent_node.search(params[0].st)
+                    all_node_parent: LabelNode = self.all_label_node
+                    all_node_grandparent: LabelNode = self.all_label_node
+                    next_all_node_index: int | None = all_node_parent.int(row_ptr)
+                    while (
+                        next_node_index is not None or next_all_node_index is not None
+                    ):
+                        if next_node_index is not None:
+                            grandparent_node = parent_node
+                            parent_node = parent_node.children[next_node_index]
+                            next_node_index = parent_node.int(row_ptr)
+
+                        if next_all_node_index is not None:
+                            all_node_grandparent = all_node_parent
+                            all_node_parent = all_node_parent.children[
+                                next_all_node_index
+                            ]
+                            next_all_node_index = all_node_parent.int(row_ptr)
+
+                    grandparental: bool = True
+                    if params[0].st[0] == "_":
+                        valid_jmp = all_node_grandparent.search(params[0].st)
+                        if valid_jmp is None:
+                            valid_jmp = all_node_parent.search(params[0].st)
+                            grandparental = False
+                    else:
+                        valid_jmp = grandparent_node.search(params[0].st)
+                        if valid_jmp is None:
+                            valid_jmp = parent_node.search(params[0].st)
+                            grandparental = False
                     if valid_jmp is None:
                         self.err(
                             row_ptr,
@@ -624,32 +708,75 @@ class Interpreter:
                         )
                         return
 
-                    self.callback_stack.append(row_ptr)
-                    if valid_jmp < 0:
-                        row_ptr = parent_node.start
+                    self.callback_stack.append((row_ptr, params[0].st[0] != "_"))
+                    if params[0].st[0] != "_":
+                        self.variable_stack.append(self.variable_scope)
+                        self.variable_scope = VariableScope()
+
+                    if params[0].st[0] == "_":
+                        used_node = (
+                            all_node_grandparent if grandparental else all_node_parent
+                        )
+                        if valid_jmp < 0:
+                            row_ptr = used_node.start
+                        else:
+                            row_ptr = used_node.children[valid_jmp].start
                     else:
-                        row_ptr = parent_node.children[valid_jmp].start
+                        used_node = grandparent_node if grandparental else parent_node
+                        if valid_jmp < 0:
+                            row_ptr = used_node.start
+                        else:
+                            row_ptr = used_node.children[valid_jmp].start
+                case "hjmp" | "chjmp":
+                    if operand.text == "chjmp" and not bool(self.regs._regs["result"]):
+                        row_ptr += 1
+                        continue
+                    # Pejorative Range
+                    parent_node = self.all_label_node
+                    next_node_index = parent_node.int(row_ptr)
+
+                    while next_node_index is not None:
+                        parent_node = parent_node.children[next_node_index]
+                        next_node_index = parent_node.int(row_ptr)
+                    # Start of the current label
+                    row_ptr = parent_node.start
+
                 case "ret":
                     if len(self.callback_stack) > 0:
-                        new_row_ptr = self.callback_stack.pop()
+                        new_row_ptr, grandparental = self.callback_stack.pop()
                         if new_row_ptr < 0:
                             # We have reached the end of the program, one can exit
                             row_ptr = len(self.token_array)
                         else:
                             row_ptr = new_row_ptr
+                            if grandparental:
+                                self.variable_scope = self.variable_stack.pop()
                     else:
                         self.err(
                             row_ptr,
                             f"Trying to return from no label, {ITALIC}(Callstack is empty){UNITALIC}",
                         )
-                case "sig":
-                    if self.sig_functions[params[0].st] is None:
-                        self.err(
-                            row_ptr,
-                            f"Signal {ITALIC}{params[0].st}{UNITALIC} not found, ensure that it is #link-ed",
-                        )
+                case "push":
+                    self.reg_stack.append(self.regs)
+                    self.regs = Registers()
+                case "pop":
+                    if len(self.reg_stack) < 1:
+                        self.err(row_ptr, "Cannot pop register class of an empty stack")
                         return
-                    self.sig_functions[params[0].st](self.regs)
+                    self.regs = self.reg_stack.pop()
+                case "sig":
+                    if params[0].st[:3] == "int":
+                        match params[0].st[4:]:
+                            case "var":
+                                print(self.variable_scope, self.variable_stack)
+                    else:
+                        if self.sig_functions[params[0].st] is None:
+                            self.err(
+                                row_ptr,
+                                f"Signal {ITALIC}{params[0].st}{UNITALIC} not found, ensure that it is #link-ed",
+                            )
+                            return
+                        self.sig_functions[params[0].st](self.regs)
                 case _:
                     self.err(
                         row_ptr,
@@ -677,14 +804,30 @@ class Interpreter:
         self.walk_tree()  # Not really a tree but who cares
         if self.debug:
             print(f"{ITALIC}Program complete!{UNITALIC}")
+            print(
+                f"\x1b[1m\n Runtime Eff. Ratio: {ITALIC}{self.runtime_sum / len(self.token_array):.3g}{UNITALIC}\x1b[0m "
+            )
 
 
 def main() -> None:
-    # file = "test_scripts/reyansh.dbg"
-    file = sys.argv[1] if sys.argv[1] else "test_scripts/reyansh.dbg"
+    parser = argparse.ArgumentParser(
+        prog="ScriptLang Parser",
+        description="Interprets .sl, .slo, and .dbg files written in the ScriptLang language",
+    )
+    parser.add_argument("filename")
+    parser.add_argument("-d", "--debug", action="store_true")
+    args = parser.parse_args()
+    file: str = args.filename
+    if not os.path.exists(file):
+        print(f"\x1b[31m Fatal Error: Path {file} does not exist\x1b[0m")
+        return
     with open(file, "r") as f:
         script = f.read()
-    int = Interpreter(debug=(len(sys.argv) > 2))
+    if not script.replace(" ", "").replace("\n", "").replace("\t", ""):
+        print(f"\x1b[31m Fatal Error: {file} is empty, or contains no code\x1b[0m")
+        return
+
+    int = Interpreter(debug=args.debug)
     int.run(script)
 
 

@@ -29,7 +29,21 @@ def dbg_flush(reg: Registers) -> Registers:
 
 
 def dbg_flushnl(reg: Registers) -> Registers:
-    print(f"{reg._regs['stdout']}\n", end="")
+    message = str(reg._regs["stdout"]).replace("\\e", "\x1b")
+    print(message)
+    return reg
+
+
+def dbg_str_to_float(reg: Registers) -> Registers:
+    try:
+        reg._regs["a"] = float(reg._regs["a"])
+        return reg
+    except ValueError:
+        return reg
+
+
+def dbg_float_to_str(reg: Registers) -> Registers:
+    reg._regs["a"] = str(reg._regs["a"])
     return reg
 
 
@@ -40,4 +54,6 @@ FUNCTIONS: dict[str, Callable] = {
     "input": dbg_input,
     "dump": dbg_dump,
     "wait": dbg_wait,
+    "stra": dbg_float_to_str,
+    "floata": dbg_str_to_float,
 }

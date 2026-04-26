@@ -1,0 +1,11 @@
+#link stdlib
+
+label dih:;
+
+label main:
+    jmp _;
+    label _;
+        set stdout "\e[1mWelcome to dbg script!\e[0m";
+        sig flushnl;
+    ret;
+ret;

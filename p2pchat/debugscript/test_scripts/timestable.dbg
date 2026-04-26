@@ -1,0 +1,26 @@
+#link stdlib
+
+label main:
+
+    set a 1; jmp _a;
+    label _a:
+        set b 1; jmp _b;
+        label _b:
+            set stdout a;
+            mul stdout b;
+            sig flush;
+            set stdout " ";
+            sig flush;
+
+            add b 1;
+            lt b 11;
+            chjmp;
+        ret;
+
+        set stdout "";
+        sig flushnl;
+
+        add a 1;
+        lt a 11; chjmp;
+    ret;
+ret;
