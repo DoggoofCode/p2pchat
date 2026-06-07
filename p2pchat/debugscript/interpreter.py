@@ -7,14 +7,16 @@ from typing import Callable, Literal, Self, Union, overload
 DataType = Union[str, float]
 WHITESPACE = ["\n", "\t", " "]
 ENDOFSTATEMENT = [":", ";"]
+INLINE_MATH = ["+", "-", "*", "/"]
 COMMENT = "%"
 PAIRS = {
     '"': '"',
     "[": "]",
+    "(": ")",
 }
 OPERATORS = {
     "set": (2, 2),
-    "sig": (1, 1),
+    "sig": (1, 2),
     "jmp": (1, 1),
     "label": (1, 1),
     "ret": (0, 0),
@@ -45,11 +47,68 @@ REGISTERS = [
 ]
 ITALIC = "\x1b[3m"
 UNITALIC = "\x1b[23m"
+ALLOWED_MATH: dict[str, list[tuple[type, ...]]] = {
+    "+": [(float, float), (str, str), (float,)],
+    "-": [(float, float), (str, str), (float,)],
+    "*": [(float, float), (float, str)],
+    "/": [(float, float)],
+}
+COMMUNICATIVE_OPS: list[str] = ["+", "*"]
+
+
+class MathExpr:
+    def __init__(self, values: list[DataType], operation: str) -> None:
+        self.values = values
+        self.operation = operation
+
+    @property
+    def res(self) -> DataType | None:
+        if ALLOWED_MATH.get(self.operation) is None:
+            return None
+        sig = ALLOWED_MATH.get(self.operation, [])
+        arg_types = tuple(type(arg) for arg in self.values)
+        if not (
+            arg_types in sig
+            or (self.operation in COMMUNICATIVE_OPS and arg_types[::-1] in sig)
+        ):
+            return None
+        try:
+            match self.operation:
+                case "+":
+                    # Aka, unary
+                    if len(self.values) == 1:
+                        return self.values[0]
+                    elif len(self.values) == 2:
+                        return self.values[0] + self.values[1]  # pyright:ignore
+                case "-":
+                    # Aka, unary
+                    if len(self.values) == 1:
+                        return self.values[0]
+                    elif len(self.values) == 2:
+                        return self.values[0] - self.values[1]  # pyright:ignore
+                case "*":
+                    return self.values[0] * self.values[1]  # pyright:ignore
+                case "/":
+                    return self.values[0] / self.values[1]  # pyright:ignore
+                case "_":
+                    raise NotImplementedError(
+                        f"Operation {self.operation} not implemented!"
+                    )
+
+        except Exception as e:
+            raise Exception(e)
 
 
 class Token:
     text: DataType
-    type: str  # l: literal (text, float), m: variable (both buffer and register), i: identifier (signal name, label name, etc.), k: keyword (operator)
+    """
+    l: literal (text, float),
+    m: variable (both buffer and register)
+    i: identifier (signal name, label name, etc.)
+    k: keyword (operator)
+    p: parameter (for signal or function (to come))
+    """
+    type: str
     subtype: str | None = None
 
     def __init__(self, type: str, text: str, subtype: str | None = None) -> None:
@@ -58,7 +117,11 @@ class Token:
         self.subtype = subtype
 
     def __repr__(self) -> str:
-        return f"Token({self.type}: {self.text}, {self.subtype})"
+        single_char = ""
+        if isinstance(self.text, str) and len(self.text) == 1:
+            single_char = f"\x1b[3m({hex(ord(self.text[0]))})\x1b[23m"
+
+        return f"Token({self.type}: '\x1b[4m{self.text}\x1b[24m'{single_char}, \x1b[2m{self.subtype}\x1b[22m)"
 
     @classmethod
     def AutoLiteral(cls, lit: str):
@@ -67,7 +130,10 @@ class Token:
             lit = float(lit)  # pyright:ignore
             sub = "float"
         except ValueError:
-            sub = "str"
+            if lit.startswith("(") and lit.endswith(")"):
+                sub = "expr"
+            else:
+                sub = "str"
         return cls("l", lit, sub)
 
     @property
@@ -270,6 +336,9 @@ class Interpreter:
                 while self.raw_script[character_pointer] != "\n":
                     character_pointer += 1
             elif character in list(PAIRS.keys()):
+                if token_text:
+                    lexed_script[-1].append(token_text)
+                    token_text = ""
                 end_char: str = PAIRS[character]
                 token_text += character
                 character_pointer += 1
@@ -345,6 +414,9 @@ class Interpreter:
                 case "sig":
                     # add the first op as a signal
                     self.token_array[-1].append(Token("i", command[1], "signal"))
+                    # a parameter exists!
+                    if len(command) > 2:
+                        self.token_array[-1].append(Token("p", command[2]))
                 case "add" | "sub" | "mul" | "div":
                     # Destination
                     if command[1] in REGISTERS:
@@ -364,11 +436,11 @@ class Interpreter:
                         self.token_array[-1].append(Token("m", command[2], "addr"))
                     else:
                         self.token_array[-1].append(Token.AutoLiteral(command[2]))
-                        if self.token_array[-1][-1].subtype != "float":
-                            self.err(
-                                index,
-                                f"Tried to add with non-float literal '\x1b[3m{command[2]}\x1b[23m'",
-                            )
+                        # if self.token_array[-1][-1].subtype != "float":
+                        #     self.err(
+                        #         index,
+                        #         f"Tried to add with non-float literal '\x1b[3m{command[2]}\x1b[23m'",
+                        #     )
                 case "gt" | "lt" | "eq":
                     # Value 1
                     if command[1] in REGISTERS:
@@ -516,6 +588,61 @@ class Interpreter:
             print("\x1b[1mAll Label Tree\x1b[0m")
             self.print_label_tree(self.all_label_node)
 
+    # Takes in a parentesized math block (..)
+    def inline_math(self, expr: str) -> DataType | None:
+        # Implement bodmas
+        expr = expr[1:-1]
+        char_ptr = 0
+        tokens: list[DataType] = []
+        token = ""
+        while char_ptr < len(expr):
+            char = expr[char_ptr]
+            if char == '"':
+                enclosed = char
+                while char_ptr < len(expr) and expr[char_ptr] != '"':
+                    enclosed += expr[char_ptr]
+                res = self.inline_math(enclosed + '"')
+                if not res:
+                    return None
+                tokens.append(res)
+            if char == "(":
+                enclosed = char
+                while char_ptr < len(expr) and expr[char_ptr] != ")":
+                    enclosed += expr[char_ptr]
+                res = self.inline_math(enclosed + ")")
+                if not res:
+                    return None
+                tokens.append(res)
+            elif char in INLINE_MATH:
+                if token:
+                    tokens.append(token)
+                    token = ""
+                tokens.append(char)
+            else:
+                token += char
+            char_ptr += 1
+        if token:
+            tokens.append(token)
+
+        # Resolve all non-floats
+        for index, tok in enumerate(tokens):
+            if tok in INLINE_MATH:
+                continue
+            if tok in REGISTERS:
+                real_tok = Token("m", tok, "reg")
+            elif isinstance(tok, str) and mem_addr(tok):
+                real_tok = Token("m", tok, "addr")
+            else:
+                real_tok = Token.AutoLiteral(str(tok))
+
+            if not (val := self.getval(real_tok, allow_literal=True)):
+                return None
+            tokens[index] = val
+
+        mth_expr = MathExpr([tokens[0], tokens[2]], str(tokens[1]))
+
+        return mth_expr.res
+
     @overload
     def getval(
         self, t: Token, *, force_float: Literal[True], allow_literal: bool = False
@@ -535,7 +662,10 @@ class Interpreter:
     ) -> DataType | None:
         value: DataType | None
         if t.type == "l" and allow_literal:
-            value = t.text
+            if t.subtype == "expr":
+                value = self.inline_math(t.st)
+            else:
+                value = t.text
         elif t.type == "m":
             if t.subtype == "reg":
                 value = self.regs.get(t.st)
@@ -590,7 +720,7 @@ class Interpreter:
                     self.setval(params[0], value)
                 case "add" | "sub" | "mul" | "div":
                     # Gets value of first number for operation
-                    value = self.getval(params[1], force_float=True, allow_literal=True)
+                    value = self.getval(params[1], allow_literal=True)
 
                     # Errors out if wrong type
                     if value is None:
@@ -604,9 +734,8 @@ class Interpreter:
                         return
 
                     # Get second value of the operation
-                    value2 = self.getval(params[0], force_float=True)
+                    value2 = self.getval(params[0])
 
-                    # Check for errors
                     if value2 is None:
                         self.err(
                             row_ptr,
@@ -617,17 +746,30 @@ class Interpreter:
                         )
                         return
 
-                    result: float = -float("inf")
+                    result: MathExpr
                     if operand.text == "add":
-                        result = value + value2
+                        result = MathExpr([value2, value], "+")
                     elif operand.text == "sub":
-                        result = value2 - value
+                        result = MathExpr([value2, value], "-")
                     elif operand.text == "mul":
-                        result = value2 * value
+                        result = MathExpr([value2, value], "*")
                     elif operand.text == "div":
-                        result = value2 / value
+                        result = MathExpr([value2, value], "/")
+                    else:
+                        self.err(row_ptr, f"Unrecognized operand {operand.text}")
+                        return
 
-                    self.setval(params[0], result)
+                    # Check for errors
+                    if result.res is None:
+                        self.err(
+                            row_ptr,
+                            (
+                                f"The operation {ITALIC}'{operand.text}'{UNITALIC} is not permitted on the values {value} and {value2}"
+                            ),
+                        )
+                        return
+
+                    self.setval(params[0], result.res)
                 case "gt" | "lt" | "eq":
                     value = self.getval(params[0], allow_literal=True, force_float=True)
 
@@ -770,13 +912,31 @@ class Interpreter:
                             case "var":
                                 print(self.variable_scope, self.variable_stack)
                     else:
-                        if self.sig_functions[params[0].st] is None:
+                        if self.sig_functions.get(params[0].st) is None:
                             self.err(
                                 row_ptr,
                                 f"Signal {ITALIC}{params[0].st}{UNITALIC} not found, ensure that it is #link-ed",
                             )
                             return
+                        if params[-1].type == "p":
+                            param_toks = []
+                            for val in params[-1].st[1:-1].split(","):
+                                if val in REGISTERS:
+                                    param_toks.append(Token("m", val, "reg"))
+                                elif mem_addr(val):
+                                    param_toks.append(Token("m", val, "addr"))
+                                else:
+                                    param_toks.append(Token.AutoLiteral(val))
+                                v = self.getval(param_toks[-1], allow_literal=True)
+                                if not v:
+                                    self.err(
+                                        row_ptr,
+                                        f"Could not resolve token {ITALIC}{param_toks[-1]}{UNITALIC} within the parameter {ITALIC}{params[-1]}{UNITALIC}",
+                                    )
+                                    return
+                                self.regs._parameters.append(v)
                         self.sig_functions[params[0].st](self.regs)
+                        self.regs._parameters = []
                 case _:
                     self.err(
                         row_ptr,
@@ -796,6 +956,7 @@ class Interpreter:
         self.tokenize()
         if self.debug:
             print(f"{ITALIC}Tokenization complete!{UNITALIC}")
+
             print(f"{ITALIC}Resolving all entries...{UNITALIC}")
         self.resolver()
         if self.debug:

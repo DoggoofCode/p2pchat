@@ -47,6 +47,11 @@ def dbg_float_to_str(reg: Registers) -> Registers:
     return reg
 
 
+def dbg_tostr(reg: Registers) -> Registers:
+    reg._regs["stdout"] = str(reg._parameters[0])
+    return reg
+
+
 FUNCTIONS: dict[str, Callable] = {
     "flusha": dbg_flusha,
     "flush": dbg_flush,
@@ -56,4 +61,5 @@ FUNCTIONS: dict[str, Callable] = {
     "wait": dbg_wait,
     "stra": dbg_float_to_str,
     "floata": dbg_str_to_float,
+    "tostr": dbg_tostr,
 }

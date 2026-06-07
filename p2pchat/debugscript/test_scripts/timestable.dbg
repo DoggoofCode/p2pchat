@@ -6,10 +6,9 @@ label main:
     label _a:
         set b 1; jmp _b;
         label _b:
-            set stdout a;
-            mul stdout b;
-            sig flush;
-            set stdout " ";
+            set stdout (a*b);  % Inline mathematics
+            sig tostr(stdout); % Parameter support for signals
+            add stdout " ";    % adding strings to strings
             sig flush;
 
             add b 1;
